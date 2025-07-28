@@ -9,6 +9,12 @@
       "vite/client"
     ]
   },
+  "baseUrl": ".",
+  "paths": {
+    "@/*": [
+      "./src/*"
+    ]
+  },
   "exclude": [
     "src/**/*.spec.ts",
     "src/**/*.test.ts",
@@ -19,5 +25,5 @@
     "src/**/*.spec.jsx",
     "src/**/*.test.jsx"
   ],
-  "include": ["src/**/*.js", "src/**/*.jsx", "src/**/*.ts", "src/**/*.tsx"]
+  "include": ["src/**/*.js", "src/**/*.jsx", "src/**/*.ts", "src/**/*.tsx", "tst/todoList/todoListComponent.spec.tsx", "tailwind.config.js", "public/dds.js"]
 }
