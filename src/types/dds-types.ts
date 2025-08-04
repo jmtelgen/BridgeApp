@@ -6,6 +6,8 @@ export interface DDSInstance {
     currentTrick0: number,   // card encoding: suit*13 + rank (our encoding)
     currentTrick1: number,   // -1 if no card played
     currentTrick2: number,   // -1 if no card played
+    target: number,
+    solution: number,
     pbn_remain_cards: number, // pointer to PBN deal string
     output_array: number     // pointer to output array of (card, score) pairs
   ): number;

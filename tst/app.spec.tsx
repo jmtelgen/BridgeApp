@@ -1,6 +1,8 @@
 import { render } from '@testing-library/react';
 
-import App from './app';
+import App from '../src/app';
+import { describe, it, expect } from 'vitest';
+import React from 'react';
 
 describe('App', () => {
   it('should render successfully', () => {
@@ -8,8 +10,8 @@ describe('App', () => {
     expect(baseElement).toBeTruthy();
   });
 
-  it('should have a greeting as the title', () => {
+  it('should render the bridge game', () => {
     const { getByText } = render(<App />);
-    expect(getByText(/Welcome TestProject/gi)).toBeTruthy();
+    expect(getByText(/Bridge Game/gi)).toBeTruthy();
   });
 });

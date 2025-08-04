@@ -13,6 +13,10 @@ export default defineConfig({
   server: {
     port: 4200,
     host: 'localhost',
+    headers: {
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Cross-Origin-Opener-Policy': 'same-origin',
+    },
   },
 
   preview: {
@@ -20,7 +24,24 @@ export default defineConfig({
     host: 'localhost',
   },
 
-  plugins: [react(), nxViteTsPaths(), svgr(), tailwindcss()],
+  plugins: [
+    react(), 
+    nxViteTsPaths(), 
+    svgr(), 
+    tailwindcss(),
+    // Custom plugin to handle WASM files
+    {
+      name: 'wasm-loader',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url?.endsWith('.wasm')) {
+            res.setHeader('Content-Type', 'application/wasm');
+          }
+          next();
+        });
+      },
+    },
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -39,7 +60,19 @@ export default defineConfig({
     commonjsOptions: {
       transformMixedEsModules: true,
     },
+    assetsInlineLimit: 0, // Don't inline WASM files
+    rollupOptions: {
+      output: {
+        // Use relative paths for CloudFront compatibility
+        assetFileNames: 'assets/[name]-[hash][extname]',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+      },
+    },
   },
+
+  // Base path for relative URLs (important for CloudFront)
+  base: './',
 
   test: {
     watch: false,
