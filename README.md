@@ -45,7 +45,11 @@ cd BridgeGame
 npm install
 ```
 
-### 3. Start Development Server
+### 3. Build Configuration
+
+This project is configured to run without Nx Cloud (offline mode). If you encounter any Nx Cloud connection errors, the configuration is already set to disable cloud features.
+
+### 4. Start Development Server
 
 ```bash
 npm start
@@ -55,7 +59,7 @@ npx nx serve TestProject
 
 The application will be available at `http://localhost:4200`
 
-### 4. Build for Production
+### 5. Build for Production
 
 ```bash
 npm run build
