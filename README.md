@@ -6,6 +6,7 @@ A modern, real-time Bridge card game built with React, TypeScript, and Vite. Thi
 
 - **Real-time Gameplay**: Multiplayer Bridge game with live updates
 - **Room Management**: Create and join game rooms with unique IDs
+- **User Management**: Automatic user ID generation and persistence
 - **AI/Robot Players**: Built-in AI for bidding and playing
 - **Serverless Backend**: Powered by AWS Lambda and DynamoDB
 - **Modern UI**: Built with React, Tailwind CSS, and Radix UI components
@@ -89,8 +90,11 @@ src/
 ├── hooks/              # Custom React hooks
 ├── services/           # API and external services
 ├── stores/             # Zustand state stores
+│   ├── userStore.ts    # User ID and player name management
+│   └── roomStore.ts    # Room state management
 ├── types/              # TypeScript type definitions
 ├── utils/              # Utility functions
+│   └── userUtils.ts    # User management utilities
 ├── app.tsx             # Main application component
 ├── main.tsx            # Application entry point
 └── styles.css          # Global styles
@@ -218,10 +222,12 @@ Configure environment variables for different deployment environments:
 
 ```bash
 # Development
-VITE_API_BASE_URL=http://localhost:8000 npm run build
+VITE_API_BASE_URL=http://localhost:8000
+VITE_WS_ENDPOINT=wss://ipp77av3oi.execute-api.us-west-2.amazonaws.com/dev
 
 # Production
-VITE_API_BASE_URL=https://your-api-gateway-url.amazonaws.com npm run build
+VITE_API_BASE_URL=https://your-api-gateway-url.amazonaws.com
+VITE_WS_ENDPOINT=wss://ipp77av3oi.execute-api.us-west-2.amazonaws.com/dev
 ```
 
 ### Backend Configuration
@@ -229,9 +235,23 @@ VITE_API_BASE_URL=https://your-api-gateway-url.amazonaws.com npm run build
 For the backend API deployment and configuration, refer to the [NextLevelBridgeAPI repository](https://github.com/jmtelgen/NextLevelBridgeAPI) which contains:
 
 - Lambda function deployment scripts
-- API Gateway configuration
+- API Gateway configuration (REST and WebSocket)
 - DynamoDB setup instructions
 - Testing and development guides
+
+### WebSocket API
+
+The application now supports real-time communication via WebSocket connections. For detailed WebSocket API documentation, see [WEBSOCKET_API.md](./WEBSOCKET_API.md).
+
+**Key WebSocket Features:**
+- Real-time room creation and joining
+- Live bidding and card playing
+- Instant game state updates
+- Automatic reconnection handling
+- Fallback to REST API when WebSocket unavailable
+- User identification via query parameters (`userId` and `userName`)
+- On-demand connection (connects when creating/joining rooms)
+- Persistent connection (maintained during navigation, only disconnects on tab close)
 
 ## 📚 Additional Resources
 

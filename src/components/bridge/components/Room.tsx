@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, Users, Plus, LogIn } from "lucide-react"
 import type { Theme } from "./ThemeSelector"
 import { roomService } from "../../../services"
+import { useUserStore } from "../../../stores/userStore"
+import { useRoomDataStore } from "../../../stores/roomDataStore"
 
 interface RoomManagerProps {
   theme: Theme
@@ -14,17 +16,32 @@ interface RoomManagerProps {
 }
 
 export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
+  const { playerName: storedPlayerName, setPlayerName } = useUserStore()
+  const { setCurrentRoom } = useRoomDataStore()
   const [activeTab, setActiveTab] = useState<"create" | "join">("create")
   const [isLoading, setIsLoading] = useState(false)
 
   // Create room form state
   const [roomName, setRoomName] = useState("")
   const [isPrivate, setIsPrivate] = useState(false)
-  const [playerName, setPlayerName] = useState("")
+  const [playerName, setLocalPlayerName] = useState(storedPlayerName || "")
 
   // Join room form state
   const [roomId, setRoomId] = useState("")
-  const [joinPlayerName, setJoinPlayerName] = useState("")
+  const [joinPlayerName, setJoinPlayerName] = useState(storedPlayerName || "")
+
+  // Update stored player name when local state changes
+  useEffect(() => {
+    if (playerName && playerName !== storedPlayerName) {
+      setPlayerName(playerName)
+    }
+  }, [playerName, storedPlayerName, setPlayerName])
+
+  useEffect(() => {
+    if (joinPlayerName && joinPlayerName !== storedPlayerName) {
+      setPlayerName(joinPlayerName)
+    }
+  }, [joinPlayerName, storedPlayerName, setPlayerName])
 
   const createRoom = async () => {
     if (!roomName.trim() || !playerName.trim()) {
@@ -36,6 +53,9 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
 
     setIsLoading(true)
 
+    // Update stored player name
+    setPlayerName(playerName.trim())
+
     const response = await roomService.createRoom({
       roomName: roomName.trim(),
       isPrivate,
@@ -45,6 +65,9 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
 
     if (response.success && response.data) {
       const roomData = response.data.room // Access the nested room object
+      
+      // Store the room data
+      setCurrentRoom(roomData)
       
       // Find the first available seat or assign South as default
       const availableSeats = ["South", "North", "East", "West"]
@@ -67,19 +90,25 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
 
     setIsLoading(true)
 
+    // Update stored player name
+    setPlayerName(joinPlayerName.trim())
+
     // For now, we'll try to join the first available seat
     // In a real implementation, you might want to get the current room state first
     const availableSeats = ["N", "S", "E", "W"]
     const seat = "N" // Default to North, the API will handle seat availability
 
     const response = await roomService.joinRoom({
-      userId: joinPlayerName.trim(),
+      playerName: joinPlayerName.trim(),
       roomId: roomId.trim(),
       seat: seat,
     })
 
     if (response.success && response.data) {
       const roomData = response.data.room
+      
+      // Store the room data
+      setCurrentRoom(roomData)
       
       // Convert seat position to the format expected by the game
       const seatMapping: Record<string, string> = {
@@ -106,6 +135,9 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
     }
 
     setIsLoading(true)
+
+    // Update stored player name
+    setPlayerName(playerName.trim())
 
     // For now, simulate quick join since we don't have a quick join endpoint
     // In a real implementation, you would call your quick join API endpoint
@@ -189,7 +221,7 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
                   <Input
                     id="playerName"
                     value={playerName}
-                    onChange={(e) => setPlayerName(e.target.value)}
+                    onChange={(e) => setLocalPlayerName(e.target.value)}
                     placeholder="Enter your name"
                     className="mt-1"
                   />

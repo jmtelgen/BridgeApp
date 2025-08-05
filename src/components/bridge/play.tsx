@@ -6,6 +6,7 @@ import { BiddingArea } from "./components/BiddingArea"
 import { PlayingArea } from "./components/PlayingArea"
 import { GameCompleted } from "./components/GameCompleted"
 import { useGameStore } from "../../stores/gameStore"
+import { useRoomDataStore } from "../../stores/roomDataStore"
 import { useAITurn } from "../../hooks/useAITurn"
 import { PlayingCard, Position } from "./types"
 import { useNavigate } from "react-router-dom"
@@ -21,6 +22,7 @@ export default function BridgeGame() {
     makeBid,
     playCard
   } = useGameStore()
+  const { getPlayerName } = useRoomDataStore()
 
   // Handle AI turns automatically
   useAITurn()
@@ -112,6 +114,9 @@ export default function BridgeGame() {
           {/* West Player */}
           <div className="flex flex-col justify-center">
             <div className="text-center mb-2">
+              <div className="text-sm font-medium text-gray-700 mb-1">
+                {getPlayerName("W") || "West"}
+              </div>
               <Badge variant={gameState.currentPlayer === "West" ? "default" : "outline"}>West</Badge>
               {gameState.dealer === "West" && gameState.phase === "bidding" && (
                 <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800">Dealer</Badge>
@@ -128,6 +133,9 @@ export default function BridgeGame() {
             {/* North Player */}
             <div className="mb-4">
               <div className="text-center mb-2">
+                <div className="text-sm font-medium text-gray-700 mb-1">
+                  {getPlayerName("N") || "North"}
+                </div>
                 <Badge variant={gameState.currentPlayer === "North" ? "default" : "outline"}>North</Badge>
                 {gameState.dealer === "North" && gameState.phase === "bidding" && (
                   <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800">Dealer</Badge>
@@ -163,7 +171,10 @@ export default function BridgeGame() {
             {/* South Player */}
             <div className="mt-4">
               <div className="text-center mb-2">
-                <Badge variant={gameState.currentPlayer === "South" ? "default" : "outline"}>South (You)</Badge>
+                <div className="text-sm font-medium text-gray-700 mb-1">
+                  {getPlayerName("S") || "South"} (You)
+                </div>
+                <Badge variant={gameState.currentPlayer === "South" ? "default" : "outline"}>South</Badge>
                 {gameState.dealer === "South" && gameState.phase === "bidding" && (
                   <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800">Dealer</Badge>
                 )}
@@ -178,6 +189,9 @@ export default function BridgeGame() {
           {/* East Player */}
           <div className="flex flex-col justify-center">
             <div className="text-center mb-2">
+              <div className="text-sm font-medium text-gray-700 mb-1">
+                {getPlayerName("E") || "East"}
+              </div>
               <Badge variant={gameState.currentPlayer === "East" ? "default" : "outline"}>East</Badge>
               {gameState.dealer === "East" && gameState.phase === "bidding" && (
                 <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800">Dealer</Badge>
