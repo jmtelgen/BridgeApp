@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Route, Routes, useNavigate, useParams } from 'react-router-dom';
-import BridgeGame from './components/bridge/play';
 import { RoomManager } from './components/bridge/components/Room';
+import { RoomGame } from './components/bridge/components/RoomGame';
 import { useRoomStore } from './stores/roomStore';
 import { useUserStore } from './stores/userStore';
 import { Toaster } from './components/ui/toaster';
@@ -28,7 +28,7 @@ function RoomPage() {
 }
 
 // Bridge game component for the room route
-function RoomGame() {
+function RoomGameWrapper() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const { isValidRoom } = useRoomStore();
@@ -49,11 +49,7 @@ function RoomGame() {
     return null; // Will redirect in useEffect
   }
   
-  return (
-    <div>
-      <BridgeGame />
-    </div>
-  );
+  return <RoomGame />;
 }
 
 export function App() {
@@ -100,7 +96,7 @@ export function App() {
     <>
       <Routes>
         <Route path="/" element={<RoomPage />} />
-        <Route path="/room/:roomId" element={<RoomGame />} />
+        <Route path="/room/:roomId" element={<RoomGameWrapper />} />
       </Routes>
       <Toaster />
     </>

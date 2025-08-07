@@ -1,4 +1,4 @@
-import { useErrorStore } from '../stores/errorStore'
+
 
 export interface ApiResponse<T> {
   data: T | null
@@ -63,6 +63,7 @@ export async function apiCall<T>(
       const errorMsg = errorData?.message || errorMessage
       
       if (showError) {
+        const { useErrorStore } = await import('../stores/errorStore')
         useErrorStore.getState().showError(errorMsg)
       }
       
@@ -82,6 +83,7 @@ export async function apiCall<T>(
     }
 
     if (showSuccess) {
+      const { useErrorStore } = await import('../stores/errorStore')
       useErrorStore.getState().showSuccess(successMessage)
     }
 
@@ -95,6 +97,7 @@ export async function apiCall<T>(
     const errorMsg = error instanceof Error ? error.message : errorMessage
     
     if (showError) {
+      const { useErrorStore } = await import('../stores/errorStore')
       useErrorStore.getState().handleApiError(error, errorMessage)
     }
     

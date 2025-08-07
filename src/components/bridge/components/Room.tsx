@@ -4,9 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Users, Plus, LogIn } from "lucide-react"
+import { Loader2, Users, Plus, LogIn, RefreshCw } from "lucide-react"
 import type { Theme } from "./ThemeSelector"
 import { roomService } from "../../../services"
+import { connectionService } from "../../../services/connectionService"
 import { useUserStore } from "../../../stores/userStore"
 import { useRoomDataStore } from "../../../stores/roomDataStore"
 
@@ -17,9 +18,13 @@ interface RoomManagerProps {
 
 export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
   const { playerName: storedPlayerName, setPlayerName } = useUserStore()
-  const { setCurrentRoom } = useRoomDataStore()
+  const { setCurrentRoom, setCurrentPlayerPosition } = useRoomDataStore()
   const [activeTab, setActiveTab] = useState<"create" | "join">("create")
   const [isLoading, setIsLoading] = useState(false)
+  const [connectionCount, setConnectionCount] = useState<number>(0)
+  const [activeUserCount, setActiveUserCount] = useState<number>(0)
+  const [activeRoomCount, setActiveRoomCount] = useState<number>(0)
+  const [isLoadingConnections, setIsLoadingConnections] = useState(true)
 
   // Create room form state
   const [roomName, setRoomName] = useState("")
@@ -42,6 +47,34 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
       setPlayerName(joinPlayerName)
     }
   }, [joinPlayerName, storedPlayerName, setPlayerName])
+
+  // Fetch connection count function
+  const fetchConnectionCount = async () => {
+    try {
+      setIsLoadingConnections(true)
+      const response = await connectionService.getConnectionCount()
+      if (response.success && response.data) {
+        setConnectionCount(response.data.totalConnections || 0)
+        setActiveUserCount(response.data.activeUserCount || 0)
+        setActiveRoomCount(response.data.activeRoomCount || 0)
+      }
+    } catch (error) {
+      console.error('Failed to fetch connection count:', error)
+    } finally {
+      setIsLoadingConnections(false)
+    }
+  }
+
+  // Fetch connection count on component mount
+  useEffect(() => {
+    fetchConnectionCount()
+  }, [])
+
+  // Auto-refresh connection count every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchConnectionCount, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   const createRoom = async () => {
     if (!roomName.trim() || !playerName.trim()) {
@@ -70,8 +103,22 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
       setCurrentRoom(roomData)
       
       // Find the first available seat or assign South as default
-      const availableSeats = ["South", "North", "East", "West"]
-      const playerPosition = availableSeats.find(seat => !roomData.seats[seat]) || "South"
+      // The backend uses N,S,W,E seat keys
+      const availableSeats = ["S", "N", "E", "W"]
+      const fullSeatNames = ["South", "North", "East", "West"]
+      
+      let playerPosition = "South" // Default
+      for (let i = 0; i < availableSeats.length; i++) {
+        const seatKey = availableSeats[i]
+        const fullName = fullSeatNames[i]
+        if (!roomData.seats[seatKey]) {
+          playerPosition = fullName
+          break
+        }
+      }
+
+      // Set the current player position
+      setCurrentPlayerPosition(playerPosition)
 
       // Navigate to the room
       onRoomJoined(roomData.roomId, playerPosition)
@@ -119,6 +166,9 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
       }
       const playerPosition = seatMapping[seat] || "North"
 
+      // Set the current player position
+      setCurrentPlayerPosition(playerPosition)
+
       // Navigate to the room
       onRoomJoined(roomData.roomId, playerPosition)
     }
@@ -160,8 +210,22 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
     await new Promise(resolve => setTimeout(resolve, 500))
 
     // Find the first available seat or assign East as default
-    const availableSeats = ["South", "North", "East", "West"]
-    const playerPosition = availableSeats.find(seat => !mockRoomData.seats[seat]) || "East"
+    // The backend uses N,S,W,E seat keys
+    const availableSeats = ["S", "N", "E", "W"]
+    const fullSeatNames = ["South", "North", "East", "West"]
+    
+    let playerPosition = "East" // Default
+    for (let i = 0; i < availableSeats.length; i++) {
+      const seatKey = availableSeats[i]
+      const fullName = fullSeatNames[i]
+      if (!mockRoomData.seats[seatKey]) {
+        playerPosition = fullName
+        break
+      }
+    }
+
+    // Set the current player position
+    setCurrentPlayerPosition(playerPosition)
 
     // Show success message
     const { showSuccess } = await import("../../../stores/errorStore").then(m => m.useErrorStore.getState())
@@ -179,6 +243,27 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
         <div className="text-center mb-8">
           <h1 className={`text-4xl font-bold mb-2 ${theme.colors.text}`}>Bridge Rooms</h1>
           <p className={`text-lg ${theme.colors.textMuted}`}>Create or join a bridge game room</p>
+          
+          {/* Active Users Display */}
+          <div className="mt-4 flex justify-center items-center gap-2">
+            <Users className="w-5 h-5 text-gray-500" />
+            <span className={`text-sm ${theme.colors.textMuted}`}>
+              {isLoadingConnections ? (
+                "Loading active users..."
+              ) : (
+                `${activeUserCount} active user${activeUserCount !== 1 ? 's' : ''} online`
+              )}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={fetchConnectionCount}
+              disabled={isLoadingConnections}
+              className="p-1 h-auto"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoadingConnections ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
         </div>
 
         {/* Tab Navigation */}
@@ -370,11 +455,11 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
           <div className="flex justify-center gap-4">
             <Badge variant="outline" className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              Online Players: 42
+              Online Players: {isLoadingConnections ? "..." : activeUserCount}
             </Badge>
             <Badge variant="outline" className="flex items-center gap-2">
               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              Active Rooms: 12
+              Active Rooms: {isLoadingConnections ? "..." : activeRoomCount}
             </Badge>
           </div>
         </div>

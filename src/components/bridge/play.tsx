@@ -22,7 +22,7 @@ export default function BridgeGame() {
     makeBid,
     playCard
   } = useGameStore()
-  const { getPlayerName } = useRoomDataStore()
+  const { getPlayerName, getCurrentPlayerPosition, isRobot } = useRoomDataStore()
 
   // Handle AI turns automatically
   useAITurn()
@@ -39,41 +39,163 @@ export default function BridgeGame() {
     }
   }
 
-  const renderPlayerHand = (position: Position) => {
-    const isCurrentPlayer = gameState.currentPlayer === position
+  // Get the current player's position
+  const currentPlayerPosition = getCurrentPlayerPosition()
+  
+
+
+  // Map game positions to display positions based on current player
+  // The current player should always be displayed at the bottom with their own direction
+  const getDisplayPosition = (gamePosition: Position): Position => {
+    if (!currentPlayerPosition) return gamePosition
+    
+    // If current player is South, no rotation needed
+    if (currentPlayerPosition === "South") {
+      return gamePosition
+    }
+    
+    // If current player is North, rotate 180 degrees
+    if (currentPlayerPosition === "North") {
+      const northMap: Record<Position, Position> = {
+        "North": "South",
+        "South": "North", 
+        "East": "West",
+        "West": "East"
+      }
+      return northMap[gamePosition] || gamePosition
+    }
+    
+    // If current player is East, rotate 90 degrees clockwise
+    if (currentPlayerPosition === "East") {
+      const eastMap: Record<Position, Position> = {
+        "North": "West",
+        "South": "East",
+        "East": "North", 
+        "West": "South"
+      }
+      return eastMap[gamePosition] || gamePosition
+    }
+    
+    // If current player is West, rotate 90 degrees counter-clockwise
+    if (currentPlayerPosition === "West") {
+      const westMap: Record<Position, Position> = {
+        "North": "East",
+        "South": "West", 
+        "East": "South",
+        "West": "North"
+      }
+      return westMap[gamePosition] || gamePosition
+    }
+    
+    return gamePosition
+  }
+
+  // Get the actual game position from display position
+  const getGamePosition = (displayPosition: Position): Position => {
+    if (!currentPlayerPosition) return displayPosition
+    
+    // If current player is South, no rotation needed
+    if (currentPlayerPosition === "South") {
+      return displayPosition
+    }
+    
+    // If current player is North, rotate 180 degrees
+    if (currentPlayerPosition === "North") {
+      const northMap: Record<Position, Position> = {
+        "North": "South",
+        "South": "North", 
+        "East": "West",
+        "West": "East"
+      }
+      return northMap[displayPosition] || displayPosition
+    }
+    
+    // If current player is East, rotate 90 degrees counter-clockwise
+    if (currentPlayerPosition === "East") {
+      const eastMap: Record<Position, Position> = {
+        "North": "East",
+        "South": "West",
+        "East": "South", 
+        "West": "North"
+      }
+      return eastMap[displayPosition] || displayPosition
+    }
+    
+    // If current player is West, rotate 90 degrees clockwise
+    if (currentPlayerPosition === "West") {
+      const westMap: Record<Position, Position> = {
+        "North": "West",
+        "South": "East", 
+        "East": "North",
+        "West": "South"
+      }
+      return westMap[displayPosition] || displayPosition
+    }
+    
+    return displayPosition
+  }
+
+  // Helper function to get the seat key for a game position
+  const getSeatKey = (gamePosition: Position): string => {
+    const seatMap: Record<Position, string> = {
+      "North": "N",
+      "South": "S", 
+      "East": "E",
+      "West": "W"
+    }
+    return seatMap[gamePosition] || "N"
+  }
+
+  // Helper function to get player name for a game position
+  const getPlayerNameForPosition = (gamePosition: Position): string => {
+    const seatKey = getSeatKey(gamePosition)
+    const playerName = getPlayerName(seatKey)
+    
+
+    
+    // The backend uses N,S,W,E, so we should get the player name directly
+    // If no player name found, it might be an empty seat
+    return playerName || `Empty ${gamePosition}`
+  }
+
+  const renderPlayerHand = (displayPosition: Position) => {
+    // Get the actual game position for this display position
+    const gamePosition = getGamePosition(displayPosition)
+    
+    const isCurrentPlayer = gameState.currentPlayer === gamePosition
     const isPlayerTurn = gameState.phase === "playing" && isCurrentPlayer
     const showCards = 
-      position === "South" || 
-      (gameState.phase === "playing" && gameState.dummy === position && gameState.firstCardPlayed)
-    const isDummy = gameState.phase === "playing" && gameState.dummy === position
+      displayPosition === "South" || 
+      (gameState.phase === "playing" && gameState.dummy === gamePosition && gameState.firstCardPlayed)
+    const isDummy = gameState.phase === "playing" && gameState.dummy === gamePosition
     
-    // Check if South should control this hand
-    // South can control their own hand when it's their turn
-    // South can control dummy hand only when dummy is the current player AND South is the declarer
-    const shouldSouthControl = 
-      (position === "South" && gameState.currentPlayer === "South") || 
-      (gameState.contract && gameState.contract.declarer === "South" && 
-       gameState.dummy === position && gameState.currentPlayer === position)
+    // Check if the current player should control this hand
+    // Current player can control their own hand when it's their turn
+    // Current player can control dummy hand only when dummy is the current player AND current player is the declarer
+    const shouldCurrentPlayerControl = 
+      (displayPosition === "South" && gameState.currentPlayer === gamePosition) || 
+      (gameState.contract && gameState.contract.declarer === gamePosition && 
+       gameState.dummy === gamePosition && gameState.currentPlayer === gamePosition)
     
-    // Update isPlayerTurn to include dummy control by South
+    // Update isPlayerTurn to include dummy control by current player
     const isPlayerTurnForControl = isPlayerTurn || 
-      (gameState.contract && gameState.contract.declarer === "South" && 
-       gameState.dummy === position && gameState.currentPlayer === position)
+      (gameState.contract && gameState.contract.declarer === gamePosition && 
+       gameState.dummy === gamePosition && gameState.currentPlayer === gamePosition)
 
     // For East/West dummy hands, use column display
-    const displayAsDummy = isDummy && (position === "East" || position === "West")
+    const displayAsDummy = isDummy && (displayPosition === "East" || displayPosition === "West")
 
     return (
       <PlayerHand
-        position={position}
-        cards={gameState.hands[position]}
+        position={displayPosition}
+        cards={gameState.hands[gamePosition]}
         isCurrentPlayer={isCurrentPlayer}
         isPlayerTurn={isPlayerTurnForControl!}
         showCards={showCards}
         isDummy={isDummy}
         selectedCard={selectedCard}
-        currentTrickCard={gameState.currentTrick.cards[position]}
-        onCardClick={shouldSouthControl ? handleCardClick : undefined}
+        currentTrickCard={gameState.currentTrick.cards[gamePosition]}
+        onCardClick={shouldCurrentPlayerControl ? handleCardClick : undefined}
         displayAsDummy={displayAsDummy}
       />
     )
@@ -115,13 +237,19 @@ export default function BridgeGame() {
           <div className="flex flex-col justify-center">
             <div className="text-center mb-2">
               <div className="text-sm font-medium text-gray-700 mb-1">
-                {getPlayerName("W") || "West"}
+                {getPlayerNameForPosition(getGamePosition("West"))}
+                {getGamePosition("West") === getCurrentPlayerPosition() && " (You)"}
               </div>
-              <Badge variant={gameState.currentPlayer === "West" ? "default" : "outline"}>West</Badge>
-              {gameState.dealer === "West" && gameState.phase === "bidding" && (
+              <Badge variant={gameState.currentPlayer === getGamePosition("West") ? "default" : "outline"}>
+                {getDisplayPosition(getGamePosition("West"))}
+              </Badge>
+              {gameState.dealer === getGamePosition("West") && gameState.phase === "bidding" && (
                 <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800">Dealer</Badge>
               )}
-              {gameState.dummy === "West" && <Badge variant="secondary" className="ml-1">Dummy</Badge>}
+              {gameState.dummy === getGamePosition("West") && <Badge variant="secondary" className="ml-1">Dummy</Badge>}
+              {isRobot(getPlayerNameForPosition(getGamePosition("West"))) && (
+                <Badge variant="outline" className="ml-1 bg-blue-50 text-blue-700">AI</Badge>
+              )}
             </div>
             <div className="transform -rotate-90 origin-center">
               {renderPlayerHand("West")}
@@ -134,13 +262,19 @@ export default function BridgeGame() {
             <div className="mb-4">
               <div className="text-center mb-2">
                 <div className="text-sm font-medium text-gray-700 mb-1">
-                  {getPlayerName("N") || "North"}
+                  {getPlayerNameForPosition(getGamePosition("North"))}
+                  {getGamePosition("North") === getCurrentPlayerPosition() && " (You)"}
                 </div>
-                <Badge variant={gameState.currentPlayer === "North" ? "default" : "outline"}>North</Badge>
-                {gameState.dealer === "North" && gameState.phase === "bidding" && (
+                <Badge variant={gameState.currentPlayer === getGamePosition("North") ? "default" : "outline"}>
+                  {getDisplayPosition(getGamePosition("North"))}
+                </Badge>
+                {gameState.dealer === getGamePosition("North") && gameState.phase === "bidding" && (
                   <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800">Dealer</Badge>
                 )}
-                {gameState.dummy === "North" && <Badge variant="secondary" className="ml-1">Dummy</Badge>}
+                {gameState.dummy === getGamePosition("North") && <Badge variant="secondary" className="ml-1">Dummy</Badge>}
+                {isRobot(getPlayerNameForPosition(getGamePosition("North"))) && (
+                  <Badge variant="outline" className="ml-1 bg-blue-50 text-blue-700">AI</Badge>
+                )}
               </div>
               <div className="flex justify-center">
                 {renderPlayerHand("North")}
@@ -172,13 +306,19 @@ export default function BridgeGame() {
             <div className="mt-4">
               <div className="text-center mb-2">
                 <div className="text-sm font-medium text-gray-700 mb-1">
-                  {getPlayerName("S") || "South"} (You)
+                  {getPlayerNameForPosition(getGamePosition("South"))}
+                  {getGamePosition("South") === getCurrentPlayerPosition() && " (You)"}
                 </div>
-                <Badge variant={gameState.currentPlayer === "South" ? "default" : "outline"}>South</Badge>
-                {gameState.dealer === "South" && gameState.phase === "bidding" && (
+                <Badge variant={gameState.currentPlayer === getGamePosition("South") ? "default" : "outline"}>
+                  {getDisplayPosition(getGamePosition("South"))}
+                </Badge>
+                {gameState.dealer === getGamePosition("South") && gameState.phase === "bidding" && (
                   <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800">Dealer</Badge>
                 )}
-                {gameState.dummy === "South" && <Badge variant="secondary" className="ml-1">Dummy</Badge>}
+                {gameState.dummy === getGamePosition("South") && <Badge variant="secondary" className="ml-1">Dummy</Badge>}
+                {isRobot(getPlayerNameForPosition(getGamePosition("South"))) && (
+                  <Badge variant="outline" className="ml-1 bg-blue-50 text-blue-700">AI</Badge>
+                )}
               </div>
               <div className="flex justify-center">
                 {renderPlayerHand("South")}
@@ -190,13 +330,19 @@ export default function BridgeGame() {
           <div className="flex flex-col justify-center">
             <div className="text-center mb-2">
               <div className="text-sm font-medium text-gray-700 mb-1">
-                {getPlayerName("E") || "East"}
+                {getPlayerNameForPosition(getGamePosition("East"))}
+                {getGamePosition("East") === getCurrentPlayerPosition() && " (You)"}
               </div>
-              <Badge variant={gameState.currentPlayer === "East" ? "default" : "outline"}>East</Badge>
-              {gameState.dealer === "East" && gameState.phase === "bidding" && (
+              <Badge variant={gameState.currentPlayer === getGamePosition("East") ? "default" : "outline"}>
+                {getDisplayPosition(getGamePosition("East"))}
+              </Badge>
+              {gameState.dealer === getGamePosition("East") && gameState.phase === "bidding" && (
                 <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800">Dealer</Badge>
               )}
-              {gameState.dummy === "East" && <Badge variant="secondary" className="ml-1">Dummy</Badge>}
+              {gameState.dummy === getGamePosition("East") && <Badge variant="secondary" className="ml-1">Dummy</Badge>}
+              {isRobot(getPlayerNameForPosition(getGamePosition("East"))) && (
+                <Badge variant="outline" className="ml-1 bg-blue-50 text-blue-700">AI</Badge>
+              )}
             </div>
             <div className="transform rotate-90 origin-center">
               {renderPlayerHand("East")}

@@ -1,4 +1,4 @@
-import { useErrorStore } from '../stores/errorStore'
+
 import { websocketConfig, WebSocketActions } from '../config/websocket'
 import { getCurrentUserId, getCurrentPlayerName } from '../utils/userUtils'
 
@@ -75,13 +75,17 @@ class WebSocketService {
         }
 
         this.ws.onmessage = (event) => {
-          this.handleMessage(event.data)
+          this.handleMessage(event.data).catch(error => {
+            console.error('Error handling WebSocket message:', error)
+          })
         }
 
         this.ws.onclose = (event) => {
           console.log('WebSocket disconnected:', event.code, event.reason)
           this.isConnecting = false
-          this.handleDisconnect()
+          this.handleDisconnect().catch(error => {
+            console.error('Error handling WebSocket disconnect:', error)
+          })
         }
 
         this.ws.onerror = (error) => {
@@ -131,7 +135,7 @@ class WebSocketService {
   /**
    * Handle incoming messages
    */
-  private handleMessage(data: string): void {
+  private async handleMessage(data: string): Promise<void> {
     try {
       const message: WebSocketResponse = JSON.parse(data)
       console.log('Received WebSocket message:', message)
@@ -143,6 +147,7 @@ class WebSocketService {
 
       // Handle errors
       if (!message.success && message.error) {
+        const { useErrorStore } = await import('../stores/errorStore')
         useErrorStore.getState().showError(message.error)
       }
 
@@ -154,7 +159,7 @@ class WebSocketService {
   /**
    * Handle disconnect and attempt reconnection
    */
-  private handleDisconnect(): void {
+  private async handleDisconnect(): Promise<void> {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++
       console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
@@ -165,6 +170,7 @@ class WebSocketService {
         })
       }, this.reconnectDelay * this.reconnectAttempts)
     } else {
+      const { useErrorStore } = await import('../stores/errorStore')
       useErrorStore.getState().showError('Lost connection to game server. Please refresh the page.')
     }
   }
