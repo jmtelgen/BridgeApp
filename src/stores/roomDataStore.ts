@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 interface RoomData {
   roomId: string
@@ -24,6 +25,7 @@ interface RoomDataStore {
   
   // Actions
   setCurrentRoom: (room: RoomData) => void
+  updateCurrentRoom: (updates: Partial<RoomData>) => void
   clearCurrentRoom: () => void
   setCurrentPlayerPosition: (position: string) => void
   getPlayerName: (seat: string) => string | null
@@ -31,38 +33,55 @@ interface RoomDataStore {
   getCurrentPlayerPosition: () => string | null
 }
 
-export const useRoomDataStore = create<RoomDataStore>((set, get) => ({
-  // Initial state
-  currentRoom: null,
-  currentPlayerPosition: null,
+export const useRoomDataStore = create<RoomDataStore>()(
+  persist(
+    (set, get) => ({
+      // Initial state
+      currentRoom: null,
+      currentPlayerPosition: null,
 
-  // Actions
-  setCurrentRoom: (room) => {
-    set({ currentRoom: room })
-  },
+      // Actions
+      setCurrentRoom: (room) => {
+        set({ currentRoom: room })
+      },
 
-  clearCurrentRoom: () => {
-    set({ currentRoom: null, currentPlayerPosition: null })
-  },
+      updateCurrentRoom: (updates) => {
+        set((state) => ({
+          currentRoom: state.currentRoom ? { ...state.currentRoom, ...updates } : null
+        }))
+      },
 
-  setCurrentPlayerPosition: (position) => {
-    set({ currentPlayerPosition: position })
-  },
+      clearCurrentRoom: () => {
+        set({ currentRoom: null, currentPlayerPosition: null })
+      },
 
-  getPlayerName: (seat: string) => {
-    const { currentRoom } = get()
-    if (!currentRoom) return null
-    return currentRoom.seats[seat] || null
-  },
+      setCurrentPlayerPosition: (position) => {
+        set({ currentPlayerPosition: position })
+      },
 
-  isRobot: (playerName: string) => {
-    // Check if the player name indicates it's a robot
-    return playerName.toLowerCase().includes('robot') || 
+      getPlayerName: (seat: string) => {
+        const { currentRoom } = get()
+        if (!currentRoom) return null
+        return currentRoom.seats[seat] || null
+      },
+
+      isRobot: (playerName: string) => {
+        // Check if the player name indicates it's a robot
+        return playerName.toLowerCase().includes('robot') || 
            playerName.toLowerCase().includes('ai') ||
            playerName.toLowerCase().includes('bot')
-  },
+      },
 
-  getCurrentPlayerPosition: () => {
-    return get().currentPlayerPosition
-  }
-})) 
+      getCurrentPlayerPosition: () => {
+        return get().currentPlayerPosition
+      }
+    }),
+    {
+      name: 'bridge-room-data-storage', // localStorage key
+      partialize: (state) => ({ 
+        currentRoom: state.currentRoom,
+        currentPlayerPosition: state.currentPlayerPosition
+      })
+    }
+  )
+) 

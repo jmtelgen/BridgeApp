@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Users, Bot, User, Play } from "lucide-react"
+import { Loader2, Users, Bot, User, Play, RefreshCw } from "lucide-react"
 import { useRoomDataStore } from "../../../stores/roomDataStore"
 import { useUserStore } from "../../../stores/userStore"
 
@@ -233,6 +233,14 @@ export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
         <div className="flex justify-center gap-4">
           <Button onClick={onLeaveRoom} variant="outline">
             Leave Room
+          </Button>
+          <Button 
+            onClick={() => window.location.reload()} 
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
           </Button>
           {isOwner && (
             <Button 

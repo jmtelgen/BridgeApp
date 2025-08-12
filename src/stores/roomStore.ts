@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 interface Theme {
   name: string
@@ -48,27 +49,44 @@ interface RoomStore {
   clearValidRooms: () => void
 }
 
-export const useRoomStore = create<RoomStore>((set, get) => ({
-  // Initial state
-  validRooms: new Set(),
-  theme: defaultTheme,
+export const useRoomStore = create<RoomStore>()(
+  persist(
+    (set, get) => ({
+      // Initial state
+      validRooms: new Set(),
+      theme: defaultTheme,
 
-  // Actions
-  addValidRoom: (roomId) => {
-    set((state) => ({
-      validRooms: new Set([...state.validRooms, roomId])
-    }))
-  },
+      // Actions
+      addValidRoom: (roomId) => {
+        set((state) => ({
+          validRooms: new Set([...state.validRooms, roomId])
+        }))
+      },
 
-  isValidRoom: (roomId) => {
-    return get().validRooms.has(roomId)
-  },
+      isValidRoom: (roomId) => {
+        return get().validRooms.has(roomId)
+      },
 
-  setTheme: (theme) => {
-    set({ theme })
-  },
+      setTheme: (theme) => {
+        set({ theme })
+      },
 
-  clearValidRooms: () => {
-    set({ validRooms: new Set() })
-  }
-})) 
+      clearValidRooms: () => {
+        set({ validRooms: new Set() })
+      }
+    }),
+    {
+      name: 'bridge-room-storage', // localStorage key
+      partialize: (state) => ({ 
+        validRooms: Array.from(state.validRooms), // Convert Set to Array for storage
+        theme: state.theme 
+      }),
+      onRehydrateStorage: () => (state) => {
+        // Convert Array back to Set when rehydrating
+        if (state && state.validRooms) {
+          state.validRooms = new Set(state.validRooms)
+        }
+      }
+    }
+  )
+) 

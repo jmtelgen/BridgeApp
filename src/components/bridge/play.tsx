@@ -165,7 +165,7 @@ export default function BridgeGame() {
     const isCurrentPlayer = gameState.currentPlayer === gamePosition
     const isPlayerTurn = gameState.phase === "playing" && isCurrentPlayer
     const showCards = 
-      displayPosition === "South" || 
+      (gamePosition === getCurrentPlayerPosition()) || 
       (gameState.phase === "playing" && gameState.dummy === gamePosition && gameState.firstCardPlayed)
     const isDummy = gameState.phase === "playing" && gameState.dummy === gamePosition
     
@@ -173,7 +173,7 @@ export default function BridgeGame() {
     // Current player can control their own hand when it's their turn
     // Current player can control dummy hand only when dummy is the current player AND current player is the declarer
     const shouldCurrentPlayerControl = 
-      (displayPosition === "South" && gameState.currentPlayer === gamePosition) || 
+      (gamePosition === getCurrentPlayerPosition() && gameState.currentPlayer === gamePosition) || 
       (gameState.contract && gameState.contract.declarer === gamePosition && 
        gameState.dummy === gamePosition && gameState.currentPlayer === gamePosition)
     

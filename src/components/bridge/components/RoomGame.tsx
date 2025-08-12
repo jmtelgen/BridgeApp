@@ -1,13 +1,34 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { RoomLobby } from './RoomLobby'
 import BridgeGame from '../play'
 import { useRoomDataStore } from '../../../stores/roomDataStore'
+import { useWebSocketMessages } from '../../../hooks/useWebSocketMessages'
 
 export function RoomGame() {
   const navigate = useNavigate()
   const { currentRoom, clearCurrentRoom } = useRoomDataStore()
   const [gameStarted, setGameStarted] = useState(false)
+
+  // Set up real-time WebSocket message handling for both room and game updates
+  useWebSocketMessages(currentRoom?.roomId)
+
+  // Periodic room refresh as fallback (every 10 seconds)
+  useEffect(() => {
+    if (!currentRoom?.roomId) return
+
+    const interval = setInterval(async () => {
+      try {
+        // You could add a roomService.getRoom(roomId) method here
+        // For now, we'll rely on WebSocket updates
+        console.log('Periodic room refresh check')
+      } catch (error) {
+        console.error('Failed to refresh room data:', error)
+      }
+    }, 10000)
+
+    return () => clearInterval(interval)
+  }, [currentRoom?.roomId])
 
   const handleStartGame = () => {
     setGameStarted(true)

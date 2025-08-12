@@ -35,18 +35,18 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
   const [roomId, setRoomId] = useState("")
   const [joinPlayerName, setJoinPlayerName] = useState(storedPlayerName || "")
 
-  // Update stored player name when local state changes
-  useEffect(() => {
+  // Update stored player name when user finishes editing (on blur)
+  const handlePlayerNameBlur = () => {
     if (playerName && playerName !== storedPlayerName) {
       setPlayerName(playerName)
     }
-  }, [playerName, storedPlayerName, setPlayerName])
+  }
 
-  useEffect(() => {
+  const handleJoinPlayerNameBlur = () => {
     if (joinPlayerName && joinPlayerName !== storedPlayerName) {
       setPlayerName(joinPlayerName)
     }
-  }, [joinPlayerName, storedPlayerName, setPlayerName])
+  }
 
   // Fetch connection count function
   const fetchConnectionCount = async () => {
@@ -57,6 +57,9 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
         setConnectionCount(response.data.totalConnections || 0)
         setActiveUserCount(response.data.activeUserCount || 0)
         setActiveRoomCount(response.data.activeRoomCount || 0)
+      } else {
+        // Handle API error response
+        console.error('Failed to fetch connection count:', response.error)
       }
     } catch (error) {
       console.error('Failed to fetch connection count:', error)
@@ -86,45 +89,55 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
 
     setIsLoading(true)
 
-    // Update stored player name
-    setPlayerName(playerName.trim())
+    try {
+      // Update stored player name
+      setPlayerName(playerName.trim())
 
-    const response = await roomService.createRoom({
-      roomName: roomName.trim(),
-      isPrivate,
-      maxPlayers: 4,
-      playerName: playerName.trim(),
-    })
+      const response = await roomService.createRoom({
+        roomName: roomName.trim(),
+        isPrivate,
+        maxPlayers: 4,
+        playerName: playerName.trim(),
+      })
 
-    if (response.success && response.data) {
-      const roomData = response.data.room // Access the nested room object
-      
-      // Store the room data
-      setCurrentRoom(roomData)
-      
-      // Find the first available seat or assign South as default
-      // The backend uses N,S,W,E seat keys
-      const availableSeats = ["S", "N", "E", "W"]
-      const fullSeatNames = ["South", "North", "East", "West"]
-      
-      let playerPosition = "South" // Default
-      for (let i = 0; i < availableSeats.length; i++) {
-        const seatKey = availableSeats[i]
-        const fullName = fullSeatNames[i]
-        if (!roomData.seats[seatKey]) {
-          playerPosition = fullName
-          break
+      if (response.success && response.data) {
+        const roomData = response.data.room // Access the nested room object
+        
+        // Store the room data
+        setCurrentRoom(roomData)
+        
+        // Find the first available seat or assign South as default
+        // The backend uses N,S,W,E seat keys
+        const availableSeats = ["S", "N", "E", "W"]
+        const fullSeatNames = ["South", "North", "East", "West"]
+        
+        let playerPosition = "South" // Default
+        for (let i = 0; i < availableSeats.length; i++) {
+          const seatKey = availableSeats[i]
+          const fullName = fullSeatNames[i]
+          if (!roomData.seats[seatKey]) {
+            playerPosition = fullName
+            break
+          }
         }
+
+        // Set the current player position
+        setCurrentPlayerPosition(playerPosition)
+
+        // Navigate to the room
+        onRoomJoined(roomData.roomId, playerPosition)
+      } else {
+        // Handle API error response
+        const { showError } = await import("../../../stores/errorStore").then(m => m.useErrorStore.getState())
+        showError(response.error || "Failed to create room")
       }
-
-      // Set the current player position
-      setCurrentPlayerPosition(playerPosition)
-
-      // Navigate to the room
-      onRoomJoined(roomData.roomId, playerPosition)
+    } catch (error) {
+      console.error('Error creating room:', error)
+      const { showError } = await import("../../../stores/errorStore").then(m => m.useErrorStore.getState())
+      showError("Failed to create room. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
   }
 
   const joinRoom = async () => {
@@ -137,43 +150,55 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
 
     setIsLoading(true)
 
-    // Update stored player name
-    setPlayerName(joinPlayerName.trim())
+    try {
+      // Update stored player name
+      setPlayerName(joinPlayerName.trim())
 
-    // For now, we'll try to join the first available seat
-    // In a real implementation, you might want to get the current room state first
-    const availableSeats = ["N", "S", "E", "W"]
-    const seat = "N" // Default to North, the API will handle seat availability
+      const response = await roomService.joinRoom({
+        playerName: joinPlayerName.trim(),
+        roomId: roomId.trim(),
+      })
 
-    const response = await roomService.joinRoom({
-      playerName: joinPlayerName.trim(),
-      roomId: roomId.trim(),
-      seat: seat,
-    })
+      if (response.success && response.data) {
+        const roomData = response.data.room
+        
+        // Store the room data
+        setCurrentRoom(roomData)
+        
+        // Find which seat the current player is assigned to
+        const seatMapping: Record<string, string> = {
+          "N": "North",
+          "S": "South", 
+          "E": "East",
+          "W": "West"
+        }
+        
+        // Find the seat where the current player is assigned
+        let playerPosition = "North" // Default fallback
+        for (const [seatKey, playerName] of Object.entries(roomData.seats)) {
+          if (playerName === joinPlayerName.trim()) {
+            playerPosition = seatMapping[seatKey] || "North"
+            break
+          }
+        }
 
-    if (response.success && response.data) {
-      const roomData = response.data.room
-      
-      // Store the room data
-      setCurrentRoom(roomData)
-      
-      // Convert seat position to the format expected by the game
-      const seatMapping: Record<string, string> = {
-        "N": "North",
-        "S": "South", 
-        "E": "East",
-        "W": "West"
+        // Set the current player position
+        setCurrentPlayerPosition(playerPosition)
+
+        // Navigate to the room
+        onRoomJoined(roomData.roomId, playerPosition)
+      } else {
+        // Handle API error response
+        const { showError } = await import("../../../stores/errorStore").then(m => m.useErrorStore.getState())
+        showError(response.error || "Failed to join room")
       }
-      const playerPosition = seatMapping[seat] || "North"
-
-      // Set the current player position
-      setCurrentPlayerPosition(playerPosition)
-
-      // Navigate to the room
-      onRoomJoined(roomData.roomId, playerPosition)
+    } catch (error) {
+      console.error('Error joining room:', error)
+      const { showError } = await import("../../../stores/errorStore").then(m => m.useErrorStore.getState())
+      showError("Failed to join room. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
   }
 
   const quickJoin = async () => {
@@ -186,54 +211,61 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
 
     setIsLoading(true)
 
-    // Update stored player name
-    setPlayerName(playerName.trim())
+    try {
+      // Update stored player name
+      setPlayerName(playerName.trim())
 
-    // For now, simulate quick join since we don't have a quick join endpoint
-    // In a real implementation, you would call your quick join API endpoint
-    const mockRoomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const mockRoomData: {
-      roomId: string
-      ownerId: string
-      seats: Record<string, string>
-      state: string
-      gameData: any
-    } = {
-      roomId: mockRoomId,
-      ownerId: "quick-join-owner",
-      seats: { "E": playerName.trim() },
-      state: "waiting",
-      gameData: null
-    }
-
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    // Find the first available seat or assign East as default
-    // The backend uses N,S,W,E seat keys
-    const availableSeats = ["S", "N", "E", "W"]
-    const fullSeatNames = ["South", "North", "East", "West"]
-    
-    let playerPosition = "East" // Default
-    for (let i = 0; i < availableSeats.length; i++) {
-      const seatKey = availableSeats[i]
-      const fullName = fullSeatNames[i]
-      if (!mockRoomData.seats[seatKey]) {
-        playerPosition = fullName
-        break
+      // For now, simulate quick join since we don't have a quick join endpoint
+      // In a real implementation, you would call your quick join API endpoint
+      const mockRoomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const mockRoomData: {
+        roomId: string
+        ownerId: string
+        seats: Record<string, string>
+        state: string
+        gameData: any
+      } = {
+        roomId: mockRoomId,
+        ownerId: "quick-join-owner",
+        seats: { "E": playerName.trim() },
+        state: "waiting",
+        gameData: null
       }
+
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // Find the first available seat or assign East as default
+      // The backend uses N,S,W,E seat keys
+      const availableSeats = ["S", "N", "E", "W"]
+      const fullSeatNames = ["South", "North", "East", "West"]
+      
+      let playerPosition = "East" // Default
+      for (let i = 0; i < availableSeats.length; i++) {
+        const seatKey = availableSeats[i]
+        const fullName = fullSeatNames[i]
+        if (!mockRoomData.seats[seatKey]) {
+          playerPosition = fullName
+          break
+        }
+      }
+
+      // Set the current player position
+      setCurrentPlayerPosition(playerPosition)
+
+      // Show success message
+      const { showSuccess } = await import("../../../stores/errorStore").then(m => m.useErrorStore.getState())
+      showSuccess("Quick joined room successfully!")
+
+      // Navigate to the room
+      onRoomJoined(mockRoomData.roomId, playerPosition)
+    } catch (error) {
+      console.error('Error quick joining:', error)
+      const { showError } = await import("../../../stores/errorStore").then(m => m.useErrorStore.getState())
+      showError("Failed to quick join. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
-
-    // Set the current player position
-    setCurrentPlayerPosition(playerPosition)
-
-    // Show success message
-    const { showSuccess } = await import("../../../stores/errorStore").then(m => m.useErrorStore.getState())
-    showSuccess("Quick joined room successfully!")
-
-    // Navigate to the room
-    onRoomJoined(mockRoomData.roomId, playerPosition)
-    setIsLoading(false)
   }
 
   return (
@@ -307,6 +339,7 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
                     id="playerName"
                     value={playerName}
                     onChange={(e) => setLocalPlayerName(e.target.value)}
+                    onBlur={handlePlayerNameBlur}
                     placeholder="Enter your name"
                     className="mt-1"
                   />
@@ -388,6 +421,7 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
                     id="joinPlayerName"
                     value={joinPlayerName}
                     onChange={(e) => setJoinPlayerName(e.target.value)}
+                    onBlur={handleJoinPlayerNameBlur}
                     placeholder="Enter your name"
                     className="mt-1"
                   />

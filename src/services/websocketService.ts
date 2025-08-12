@@ -281,7 +281,6 @@ export const roomWebSocketService = {
     roomId: string
     userId: string
     playerName: string
-    seat: string
   }): Promise<WebSocketResponse> => {
     const message: WebSocketMessage = {
       action: WebSocketActions.JOIN_ROOM,

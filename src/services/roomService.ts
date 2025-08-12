@@ -14,7 +14,6 @@ interface CreateRoomRequest {
 interface JoinRoomRequest {
   playerName: string  // The player's display name
   roomId: string
-  seat: string
 }
 
 interface RoomResponse {
@@ -118,8 +117,7 @@ export const roomService = {
       const wsResponse = await roomWebSocketService.joinRoom({
         roomId: request.roomId,
         userId: userId,
-        playerName: request.playerName,
-        seat: request.seat
+        playerName: request.playerName
       })
 
       if (wsResponse.success) {

@@ -15,6 +15,9 @@ import {
 } from '../components/bridge/utils/game-utils'
 import { aiPlay } from '../components/bridge/utils/ai-utils'
 import { getNextAIBid } from '../components/bridge/dds/ai-bidding-integration'
+import { gameWebSocketService } from '../services/websocketService'
+import { useRoomDataStore } from './roomDataStore'
+import { useUserStore } from './userStore'
 
 // Initialize new game
 const initializeGame = (): GameState => {
@@ -87,7 +90,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     })
   },
 
-  makeBid: (type, level, suit) => {
+  makeBid: async (type, level, suit) => {
     const { gameState } = get()
     if (gameState.phase !== "bidding") return
     
@@ -101,44 +104,35 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!isValidBid(newBid, gameState.bids)) {
       return // Invalid bid
     }
-    
-    const newBids = [...gameState.bids, newBid]
-    const nextPlayer = getNextPlayer(gameState.currentPlayer)
-    
-    if (isBiddingComplete(newBids)) {
-      // Bidding is complete, determine contract
-      const contract = determineContract(newBids)
-      if (contract) {
-        const dummy = getOppositePosition(contract.declarer) // Dummy is across from declarer
-        set(state => ({
-          ...state,
-          gameState: {
-            ...state.gameState,
-            phase: "playing",
-            currentPlayer: getNextPlayer(contract.declarer), // First lead is after declarer
-            bids: newBids,
-            contract,
-            dummy,
-            firstCardPlayed: false // Reset for new playing phase
-          }
-        }))
-      } else {
-        // All passed, start new game
-        get().startNewGame()
+
+    try {
+      // Get current room and user info
+      const { currentRoom } = useRoomDataStore.getState()
+      const userId = useUserStore.getState().userId
+      
+      if (!currentRoom?.roomId || !userId) {
+        console.error('Missing room ID or user ID for bidding')
+        return
       }
-    } else {
-      set(state => ({
-        ...state,
-        gameState: {
-          ...state.gameState,
-          currentPlayer: nextPlayer,
-          bids: newBids
-        }
-      }))
+
+      // Send bid via WebSocket
+      await gameWebSocketService.makeBid(currentRoom.roomId, userId, {
+        suit: type === "Bid" ? suit! : undefined,
+        level: type === "Bid" ? level! : undefined,
+        type: type
+      })
+
+      // Clear selected card
+      set({ selectedCard: null })
+    } catch (error) {
+      console.error('Failed to make bid:', error)
+      // Show error to user
+      const { handleApiError } = await import('./errorStore').then(m => m.useErrorStore.getState())
+      handleApiError(error, "Failed to make bid")
     }
   },
 
-  playCard: (card) => {
+  playCard: async (card) => {
     const { gameState } = get()
     if (gameState.phase !== "playing") return
     
@@ -146,86 +140,30 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!canPlayCard(card, currentHand, gameState.currentTrick.ledSuit)) {
       return // Invalid play
     }
-    
-    // Remove card from hand
-    const newHands = { ...gameState.hands }
-    newHands[gameState.currentPlayer] = currentHand.filter(c => 
-      c.suit !== card.suit || c.rank !== card.rank
-    )
-    
-    // Add card to current trick
-    const newCurrentTrick = { ...gameState.currentTrick }
-    newCurrentTrick.cards[gameState.currentPlayer] = card
-    
-    if (!newCurrentTrick.ledSuit) {
-      newCurrentTrick.ledSuit = card.suit
-      newCurrentTrick.trickLeader = gameState.currentPlayer
-    }
-    
-    // Mark that first card has been played (to show dummy hand)
-    const firstCardPlayed = gameState.tricks.length === 0 && !gameState.currentTrick.ledSuit
-    
-    const nextPlayer = getNextPlayer(gameState.currentPlayer)
-    
-    if (nextPlayer === gameState.currentPlayer || 
-        Object.values(newCurrentTrick.cards).every(c => c !== null)) {
-      // Trick is complete
-      const winner = determineTrickWinner(newCurrentTrick, gameState.contract!.suit)
-      const newTricks = [...gameState.tricks, { ...newCurrentTrick, winner }]
+
+    try {
+      // Get current room and user info
+      const { currentRoom } = useRoomDataStore.getState()
+      const userId = useUserStore.getState().userId
       
-      console.log(`Trick completed! Winner: ${winner}, currentPlayer was: ${gameState.currentPlayer}`)
-      
-      // Check if game is complete
-      if (newTricks.length === 13) {
-        set(state => ({
-          ...state,
-          gameState: {
-            ...state.gameState,
-            phase: "completed",
-            currentTrick: newCurrentTrick,
-            tricks: newTricks,
-            firstCardPlayed: true
-          },
-          selectedCard: null
-        }))
-      } else {
-        // Start new trick - store the completed trick as previousTrick
-        set(state => {
-          console.log(`Starting new trick with winner: ${winner}`)
-          return {
-            ...state,
-            gameState: {
-              ...state.gameState,
-              currentPlayer: winner,
-              hands: newHands,
-              currentTrick: {
-                cards: { North: null, East: null, South: null, West: null },
-                winner: null,
-                ledSuit: null,
-                trickLeader: null
-              },
-              previousTrick: { ...newCurrentTrick, winner },
-              tricks: newTricks,
-              firstCardPlayed: true
-            },
-            selectedCard: null
-          }
-        })
+      if (!currentRoom?.roomId || !userId) {
+        console.error('Missing room ID or user ID for playing card')
+        return
       }
-    } else {
-      set(state => ({
-        ...state,
-        gameState: {
-          ...state.gameState,
-          currentPlayer: nextPlayer,
-          hands: newHands,
-          currentTrick: newCurrentTrick,
-          firstCardPlayed: firstCardPlayed || state.gameState.firstCardPlayed,
-          // Clear previous trick when first card of new trick is played
-          previousTrick: !gameState.currentTrick.ledSuit ? null : state.gameState.previousTrick
-        },
-        selectedCard: null
-      }))
+
+      // Send card play via WebSocket
+      await gameWebSocketService.playCard(currentRoom.roomId, userId, {
+        suit: card.suit,
+        rank: card.rank
+      })
+
+      // Clear selected card
+      set({ selectedCard: null })
+    } catch (error) {
+      console.error('Failed to play card:', error)
+      // Show error to user
+      const { handleApiError } = await import('./errorStore').then(m => m.useErrorStore.getState())
+      handleApiError(error, "Failed to play card")
     }
   },
 
