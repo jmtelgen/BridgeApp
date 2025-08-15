@@ -9,11 +9,14 @@ interface GameCompletedProps {
 
 export const GameCompleted = ({ gameState, onNewGame, onBackToRoom }: GameCompletedProps) => {
   // Calculate tricks taken by each team
-  const nsTricks = gameState.tricks.filter(trick => 
+  console.log('GameCompleted - gameState.tricks:', gameState.tricks)
+  console.log('GameCompleted - gameState.tricks?.length:', gameState.tricks?.length)
+  
+  const nsTricks = (gameState.tricks || []).filter(trick => 
     trick.winner === "North" || trick.winner === "South"
   ).length
   
-  const ewTricks = gameState.tricks.filter(trick => 
+  const ewTricks = (gameState.tricks || []).filter(trick => 
     trick.winner === "East" || trick.winner === "West"
   ).length
 
@@ -27,7 +30,10 @@ export const GameCompleted = ({ gameState, onNewGame, onBackToRoom }: GameComple
       <h3 className="text-2xl font-bold mb-4">Game Complete!</h3>
       <div className="space-y-2">
         <p>Contract: {gameState.contract?.level}{gameState.contract?.suit} by {gameState.contract?.declarer}</p>
-        <p>Total tricks played: {gameState.tricks.length}</p>
+        <p>Total tricks played: {(() => {
+          console.log('GameCompleted - rendering tricks length:', gameState.tricks?.length)
+          return gameState.tricks?.length || 0
+        })()}</p>
         <p>Declarer team ({declarerTeam}): {declarerTricks} tricks</p>
         <p>Defender team ({declarerTeam === "NS" ? "EW" : "NS"}): {defenderTricks} tricks</p>
         <div className="flex gap-2 justify-center mt-4">

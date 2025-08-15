@@ -1,15 +1,23 @@
 import { useEffect } from 'react'
 import { useGameStore } from '../stores/gameStore'
+import { useRoomDataStore } from '../stores/roomDataStore'
 
 export const useAITurn = () => {
   const { gameState, aiThinking, handleAITurn } = useGameStore()
+  const { getPlayerName, isRobot } = useRoomDataStore()
 
   useEffect(() => {
-    // Handle AI turns when game state changes
+    // Only handle AI turns for robot players
     if (!aiThinking) {
-      handleAITurn()
+      const currentPlayerName = getPlayerName(gameState.currentPlayer)
+      if (currentPlayerName && isRobot(currentPlayerName)) {
+        console.log('useAITurn - calling handleAITurn for robot player:', gameState.currentPlayer)
+        handleAITurn()
+      } else {
+        console.log('useAITurn - not calling handleAITurn for human player:', gameState.currentPlayer)
+      }
     }
-  }, [gameState.currentPlayer, gameState.phase, aiThinking, handleAITurn])
+  }, [gameState.currentPlayer, gameState.phase, aiThinking, handleAITurn, getPlayerName, isRobot])
 
   // Auto-reset aiThinking if it gets stuck for too long
   useEffect(() => {

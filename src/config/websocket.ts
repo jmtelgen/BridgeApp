@@ -45,6 +45,7 @@ export const WebSocketActions = {
   CREATE_ROOM: 'createRoom',
   JOIN_ROOM: 'joinRoom',
   START_ROOM: 'startRoom',
+  ROOM_STARTED: 'roomStarted',
   ROOM_UPDATE: 'roomUpdated', // Fixed to match server action
   PLAYER_JOINED: 'playerJoined',
   PLAYER_LEFT: 'playerLeft',
@@ -56,6 +57,7 @@ export const WebSocketActions = {
   // Game state updates (from server)
   GAME_STATE_UPDATE: 'gameStateUpdate',
   BID_UPDATE: 'bidUpdate',
+  BID_MADE: 'bidMade',
   CARD_PLAYED: 'cardPlayed',
   GAME_STARTED: 'gameStarted',
   GAME_COMPLETED: 'gameCompleted'

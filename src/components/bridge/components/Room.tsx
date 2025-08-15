@@ -106,17 +106,19 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
         // Store the room data
         setCurrentRoom(roomData)
         
-        // Find the first available seat or assign South as default
-        // The backend uses N,S,W,E seat keys
-        const availableSeats = ["S", "N", "E", "W"]
-        const fullSeatNames = ["South", "North", "East", "West"]
+        // Find which seat the current player is assigned to
+        const seatMapping: Record<string, string> = {
+          "N": "North",
+          "S": "South", 
+          "E": "East",
+          "W": "West"
+        }
         
-        let playerPosition = "South" // Default
-        for (let i = 0; i < availableSeats.length; i++) {
-          const seatKey = availableSeats[i]
-          const fullName = fullSeatNames[i]
-          if (!roomData.seats[seatKey]) {
-            playerPosition = fullName
+        // Find the seat where the current player is assigned
+        let playerPosition = "South" // Default fallback
+        for (const [seatKey, playerId] of Object.entries(roomData.seats)) {
+          if (playerId && typeof playerId === 'string' && playerId.includes(playerName.trim())) {
+            playerPosition = seatMapping[seatKey] || "South"
             break
           }
         }
@@ -235,17 +237,19 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
       // Simulate network delay
       await new Promise(resolve => setTimeout(resolve, 500))
 
-      // Find the first available seat or assign East as default
-      // The backend uses N,S,W,E seat keys
-      const availableSeats = ["S", "N", "E", "W"]
-      const fullSeatNames = ["South", "North", "East", "West"]
+      // Find which seat the current player is assigned to
+      const seatMapping: Record<string, string> = {
+        "N": "North",
+        "S": "South", 
+        "E": "East",
+        "W": "West"
+      }
       
-      let playerPosition = "East" // Default
-      for (let i = 0; i < availableSeats.length; i++) {
-        const seatKey = availableSeats[i]
-        const fullName = fullSeatNames[i]
-        if (!mockRoomData.seats[seatKey]) {
-          playerPosition = fullName
+      // Find the seat where the current player is assigned
+      let playerPosition = "East" // Default fallback
+      for (const [seatKey, playerId] of Object.entries(mockRoomData.seats)) {
+        if (playerId && typeof playerId === 'string' && playerId.includes(playerName.trim())) {
+          playerPosition = seatMapping[seatKey] || "East"
           break
         }
       }

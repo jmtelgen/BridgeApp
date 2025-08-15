@@ -110,7 +110,11 @@ export const gameService = {
     }
 
     try {
-      await gameWebSocketService.makeBid(roomId, userId, bid)
+      await gameWebSocketService.makeBid(roomId, userId, {
+        type: 'Bid',
+        level: bid.level,
+        suit: bid.suit as any
+      })
       return { success: true, data: null, error: null }
     } catch (error) {
       return { success: false, data: null, error: error instanceof Error ? error.message : 'Failed to make bid' }

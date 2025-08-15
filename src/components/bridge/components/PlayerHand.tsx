@@ -27,11 +27,12 @@ export const PlayerHand = ({
   onCardClick,
   displayAsDummy = false
 }: PlayerHandProps) => {
+  console.log('PlayerHand - position:', position, 'cards:', cards, 'cards?.length:', cards?.length)
   // Don't show cards if they shouldn't be visible
-  if (!showCards && cards.length > 0) {
+  if (!showCards && cards && cards.length > 0) {
     return (
       <div className="flex gap-1">
-        {Array.from({ length: cards.length }).map((_, i) => (
+        {Array.from({ length: cards?.length || 0 }).map((_, i) => (
           <div key={i} className="bg-blue-900 border border-blue-800 rounded-lg w-[40px] h-[60px] shadow-sm" />
         ))}
       </div>
@@ -40,7 +41,7 @@ export const PlayerHand = ({
 
   // For dummy display in columns (used for East/West dummy hands)
   if (isDummy && displayAsDummy) {
-    const sortedCards = sortHandForDummy(cards)
+    const sortedCards = cards ? sortHandForDummy(cards) : []
     const cardsBySuit: Record<Suit, PlayingCard[]> = {
       "♠": [],
       "♥": [],
@@ -76,7 +77,7 @@ export const PlayerHand = ({
   }
 
   // For regular hands and North dummy (display in a row, sorted high to low)
-  const sortedCards = sortHand(cards)
+  const sortedCards = cards ? sortHand(cards) : []
   return (
     <div className="flex gap-1 flex-wrap">
       {sortedCards.map((card, index) => (

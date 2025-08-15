@@ -107,7 +107,7 @@ export const isValidBid = (newBid: Bid, previousBids: Bid[]): boolean => {
   
   // Handle Double bid
   if (newBid.type === "Double") {
-    if (previousBids.length === 0) return false
+    if (!previousBids || previousBids.length === 0) return false
     
     const lastBid = previousBids[previousBids.length - 1]
     // Double is only valid if the last bid was a suit bid (not Pass, Double, or Redouble)
@@ -116,7 +116,7 @@ export const isValidBid = (newBid: Bid, previousBids: Bid[]): boolean => {
   
   // Handle Redouble bid
   if (newBid.type === "Redouble") {
-    if (previousBids.length === 0) return false
+    if (!previousBids || previousBids.length === 0) return false
     
     const lastBid = previousBids[previousBids.length - 1]
     // Redouble is only valid if the last bid was Double and it was made by the other team
@@ -131,7 +131,7 @@ export const isValidBid = (newBid: Bid, previousBids: Bid[]): boolean => {
   
   // Find the highest previous bid
   let highestBid: Bid | null = null
-  for (let i = previousBids.length - 1; i >= 0; i--) {
+  for (let i = (previousBids?.length || 0) - 1; i >= 0; i--) {
     if (previousBids[i].type === "Bid") {
       highestBid = previousBids[i]
       break
@@ -163,7 +163,7 @@ export const determineContract = (bids: Bid[]): { level: number; suit: Suit | "N
   let redoubled = false
   
   // Check for doubles and redoubles
-  for (let i = bids.length - 1; i >= 0; i--) {
+  for (let i = (bids?.length || 0) - 1; i >= 0; i--) {
     if (bids[i].type === "Redouble") {
       redoubled = true
       break
@@ -173,7 +173,7 @@ export const determineContract = (bids: Bid[]): { level: number; suit: Suit | "N
     }
   }
   
-  for (let i = bids.length - 1; i >= 0; i--) {
+  for (let i = (bids?.length || 0) - 1; i >= 0; i--) {
     if (bids[i].type === "Bid") {
       highestBid = bids[i]
       declarer = bids[i].player
@@ -196,11 +196,11 @@ export const determineContract = (bids: Bid[]): { level: number; suit: Suit | "N
 
 // Check if bidding is complete
 export const isBiddingComplete = (bids: Bid[]): boolean => {
-  if (bids.length < 4) return false
+  if (!bids || bids.length < 4) return false
   
   // Check if we have 3 consecutive passes after a bid
   let consecutivePasses = 0
-  for (let i = bids.length - 1; i >= 0; i--) {
+  for (let i = (bids?.length || 0) - 1; i >= 0; i--) {
     if (bids[i].type === "Pass") {
       consecutivePasses++
     } else {

@@ -1,17 +1,21 @@
 import { useState } from 'react'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Bid, BidType, Position, Suit, GameState } from '../types'
+import { Bid, BidType, Position, Suit } from '../types'
+import { useGameStore } from '../../../stores/gameStore'
+import { useRoomDataStore } from '../../../stores/roomDataStore'
 
 interface BiddingAreaProps {
-  gameState: GameState
   onMakeBid: (type: BidType, level?: number, suit?: Suit | "NT") => void
-  aiThinking: boolean
 }
 
-export const BiddingArea = ({ gameState, onMakeBid, aiThinking }: BiddingAreaProps) => {
+export const BiddingArea = ({ onMakeBid }: BiddingAreaProps) => {
   const [selectedBidLevel, setSelectedBidLevel] = useState<number | null>(null)
   const [selectedBidSuit, setSelectedBidSuit] = useState<Suit | "NT" | null>(null)
+  
+  // Get data from stores
+  const { gameState, aiThinking } = useGameStore()
+  const { getCurrentPlayerPosition, getPlayerDisplayName, isRobot } = useRoomDataStore()
 
   const handleBidClick = (type: BidType, level?: number, suit?: Suit | "NT") => {
     onMakeBid(type, level, suit)
@@ -19,6 +23,31 @@ export const BiddingArea = ({ gameState, onMakeBid, aiThinking }: BiddingAreaPro
     setSelectedBidSuit(null)
   }
 
+  // Helper function to get seat key for a position
+  const getSeatKey = (position: Position): string => {
+    const seatMap: Record<Position, string> = {
+      "North": "N",
+      "South": "S", 
+      "East": "E",
+      "West": "W"
+    }
+    return seatMap[position] || "N"
+  }
+
+  // Check if current player is human and it's their turn to bid
+  const currentPlayerPosition = getCurrentPlayerPosition() as Position | null
+  const currentPlayerSeat = currentPlayerPosition ? getSeatKey(currentPlayerPosition) : null
+  const currentPlayerName = currentPlayerSeat ? getPlayerDisplayName(currentPlayerSeat) : null
+  const isCurrentPlayerHuman = currentPlayerName ? !isRobot(currentPlayerName) : false
+  const isCurrentUserTurn = currentPlayerPosition === gameState.currentPlayer
+  
+  // Debug logging
+  console.log('BiddingArea - gameState.currentPlayer:', gameState.currentPlayer)
+  console.log('BiddingArea - currentPlayerPosition:', currentPlayerPosition)
+  console.log('BiddingArea - isCurrentUserTurn:', isCurrentUserTurn)
+  console.log('BiddingArea - isCurrentPlayerHuman:', isCurrentPlayerHuman)
+  console.log('BiddingArea - aiThinking:', aiThinking)
+  
   return (
     <div className="bg-white rounded-lg p-4 shadow-sm border">
       <h3 className="font-semibold mb-3 text-center">Bidding</h3>
@@ -65,9 +94,13 @@ export const BiddingArea = ({ gameState, onMakeBid, aiThinking }: BiddingAreaPro
         })()}
       </div>
 
-      {/* Bid Selection */}
-      {gameState.currentPlayer === "South" && (
+      {/* Bid Selection - Show for current user only when it's their turn */}
+      {isCurrentUserTurn && (
         <div className="space-y-4">
+          <div className="text-center mb-2">
+            <p className="text-sm font-medium">It's your turn to bid ({currentPlayerName})</p>
+          </div>
+          
           {/* Level Selection */}
           <div>
             <p className="text-sm font-medium mb-2">Select Level:</p>
@@ -136,22 +169,23 @@ export const BiddingArea = ({ gameState, onMakeBid, aiThinking }: BiddingAreaPro
         </div>
       )}
 
-      {/* AI players will bid automatically */}
-      {gameState.currentPlayer !== "South" && gameState.phase === "bidding" && (
+      {/* Show waiting message when it's not the current user's turn */}
+      {!isCurrentUserTurn && !aiThinking && (
         <div className="text-center text-sm text-gray-600">
-          {aiThinking ? (
-            <div>
-              {gameState.currentPlayer} is thinking...
-              <br />
-              <span className="text-xs">(Using SAYC bidding conventions)</span>
-            </div>
-          ) : (
-            <div>
-              {gameState.currentPlayer} is thinking...
-              <br />
-              <span className="text-xs">(AI will bid automatically using SAYC)</span>
-            </div>
-          )}
+          <div>
+            Waiting for {currentPlayerName} to bid...
+          </div>
+        </div>
+      )}
+
+      {/* AI players will bid automatically */}
+      {!isCurrentPlayerHuman && gameState.phase === "bidding" && aiThinking && (
+        <div className="text-center text-sm text-gray-600">
+          <div>
+            {currentPlayerName} is thinking...
+            <br />
+            <span className="text-xs">(Using SAYC bidding conventions)</span>
+          </div>
         </div>
       )}
     </div>

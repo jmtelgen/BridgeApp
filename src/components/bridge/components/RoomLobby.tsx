@@ -16,6 +16,20 @@ export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
   const { playerName } = useUserStore()
   const [isStarting, setIsStarting] = useState(false)
 
+  // Listen for roomStarted events from WebSocket
+  useEffect(() => {
+    const handleStartRoom = (event: CustomEvent) => {
+      console.log('Start room event received in lobby:', event.detail)
+      onStartGame()
+    }
+
+    window.addEventListener('roomStarted', handleStartRoom as EventListener)
+
+    return () => {
+      window.removeEventListener('roomStarted', handleStartRoom as EventListener)
+    }
+  }, [onStartGame])
+
   if (!currentRoom) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
@@ -37,9 +51,28 @@ export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
 
   const handleStartGame = async () => {
     setIsStarting(true)
-    // Add a small delay to show loading state
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    onStartGame()
+    
+    try {
+      // Send start room message via WebSocket
+      const { roomWebSocketService } = await import('../../../services/websocketService')
+      const userId = useUserStore.getState().userId
+      
+      if (!currentRoom?.roomId || !userId) {
+        throw new Error('Missing room ID or user ID')
+      }
+      
+      await roomWebSocketService.startRoom(currentRoom.roomId, userId)
+      
+      // The roomStarted event will be handled by the WebSocket message handler
+      // which will automatically call onStartGame()
+      
+    } catch (error) {
+      console.error('Failed to start room:', error)
+      setIsStarting(false)
+      // Show error to user
+      const { showError } = await import('../../../stores/errorStore').then(m => m.useErrorStore.getState())
+      showError('Failed to start the game. Please try again.')
+    }
   }
 
   const getSeatDisplayName = (seat: string) => {

@@ -271,7 +271,7 @@ export const aiPlay = async (gameState: GameState): Promise<PlayingCard> => {
     const solverHands = convertHandsToSolverFormat(gameState.hands)
     
     // Convert current trick to solver format
-    const currentTrick = convertCurrentTrickToSolverFormat(gameState.currentTrick)
+    const currentTrick = gameState.currentTrick ? convertCurrentTrickToSolverFormat(gameState.currentTrick) : []
     
     console.log('AI playing - converted hands:', solverHands)
     console.log('AI playing - current trick:', currentTrick)
@@ -279,7 +279,7 @@ export const aiPlay = async (gameState: GameState): Promise<PlayingCard> => {
     // Get valid cards for current player
     const hand = gameState.hands[gameState.currentPlayer]
     const validCards = hand.filter(card => 
-      canPlayCard(card, hand, gameState.currentTrick.ledSuit)
+      canPlayCard(card, hand, gameState.currentTrick?.ledSuit || null)
     )
     
     console.log('AI playing - hand:', hand.map(c => `${c.suit}${c.rank}`))
@@ -290,7 +290,7 @@ export const aiPlay = async (gameState: GameState): Promise<PlayingCard> => {
     }
     
     // If this is the first card of the trick, use double dummy solver
-    if (currentTrick.length === 0) {
+    if (currentTrick?.length === 0) {
       console.log('AI playing - leading trick')
       const solutions = await solveBoardFromStart({
         trump: convertTrumpToSolverFormat(gameState.contract!.suit),
@@ -321,7 +321,7 @@ export const aiPlay = async (gameState: GameState): Promise<PlayingCard> => {
       console.log('AI playing - following trick')
       // For subsequent cards, use the solver with current trick
       // The 'first' parameter should be the trick leader, not the current player
-      const trickLeader = gameState.currentTrick.trickLeader || gameState.currentPlayer
+      const trickLeader = gameState.currentTrick?.trickLeader || gameState.currentPlayer
       const solutions = await solveBoard({
         trump: convertTrumpToSolverFormat(gameState.contract!.suit),
         first: positionToDirection[trickLeader],
@@ -355,7 +355,7 @@ export const aiPlay = async (gameState: GameState): Promise<PlayingCard> => {
     // Fallback to first valid card
     const hand = gameState.hands[gameState.currentPlayer]
     const validCards = hand.filter(card => 
-      canPlayCard(card, hand, gameState.currentTrick.ledSuit)
+      canPlayCard(card, hand, gameState.currentTrick?.ledSuit || null)
     )
     console.log('AI playing fallback: First valid card')
     return validCards[0]

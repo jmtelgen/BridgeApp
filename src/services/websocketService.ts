@@ -1,5 +1,6 @@
 
 import { websocketConfig, WebSocketActions } from '../config/websocket'
+import { BidType, Suit } from '../components/bridge/types'
 import { getCurrentUserId, getCurrentPlayerName } from '../utils/userUtils'
 
 export interface WebSocketMessage {
@@ -139,10 +140,17 @@ class WebSocketService {
     try {
       const message: WebSocketResponse = JSON.parse(data)
       console.log('Received WebSocket message:', message)
+      console.log('Message action:', message.action)
+      console.log('Message success:', message.success)
+      console.log('Message updateType:', (message as any).updateType)
 
       const handler = this.messageHandlers.get(message.action)
       if (handler) {
+        console.log(`Calling handler for action: ${message.action}`)
         handler(message)
+      } else {
+        console.log(`No handler registered for action: ${message.action}`)
+        console.log('Available handlers:', Array.from(this.messageHandlers.keys()))
       }
 
       // Handle errors
@@ -265,12 +273,41 @@ export const roomWebSocketService = {
     await websocketService.sendMessage(message)
     
     // Wait for the actual response from the server
+    // The server might respond with either CREATE_ROOM or roomUpdated action
     return new Promise((resolve) => {
-      const handler = (data: any) => {
+      const createRoomHandler = (data: any) => {
+        console.log('Received CREATE_ROOM response:', data)
         websocketService.offMessage(WebSocketActions.CREATE_ROOM)
+        websocketService.offMessage('roomUpdated')
         resolve(data)
       }
-      websocketService.onMessage(WebSocketActions.CREATE_ROOM, handler)
+      
+      const roomUpdatedHandler = (data: any) => {
+        console.log('Received roomUpdated response for create room:', data)
+        // Resolve for any roomUpdated message with room data
+        if (data.room && data.updateType === 'roomCreated') {
+          console.log('Promise handler resolving for create room')
+          websocketService.offMessage(WebSocketActions.CREATE_ROOM)
+          // Don't remove the roomUpdated handler here - let the event handler keep it
+          resolve(data)
+        }
+      }
+      
+      // Listen for both possible response types
+      websocketService.onMessage(WebSocketActions.CREATE_ROOM, createRoomHandler)
+      websocketService.onMessage('roomUpdated', roomUpdatedHandler)
+      
+      // Add timeout to prevent hanging
+      setTimeout(() => {
+        console.warn('Create room request timed out')
+        websocketService.offMessage(WebSocketActions.CREATE_ROOM)
+        // Don't remove the roomUpdated handler here - let the event handler keep it
+        resolve({
+          action: WebSocketActions.CREATE_ROOM,
+          success: false,
+          error: 'Create room request timed out'
+        })
+      }, 10000) // 10 second timeout
     })
   },
 
@@ -294,12 +331,41 @@ export const roomWebSocketService = {
     await websocketService.sendMessage(message)
     
     // Wait for the actual response from the server
+    // The server might respond with either JOIN_ROOM or roomUpdated action
     return new Promise((resolve) => {
-      const handler = (data: any) => {
+      const joinRoomHandler = (data: any) => {
+        console.log('Received JOIN_ROOM response:', data)
         websocketService.offMessage(WebSocketActions.JOIN_ROOM)
+        websocketService.offMessage('roomUpdated')
         resolve(data)
       }
-      websocketService.onMessage(WebSocketActions.JOIN_ROOM, handler)
+      
+      const roomUpdatedHandler = (data: any) => {
+        console.log('Received roomUpdated response for join room:', data)
+        // Resolve for any roomUpdated message with room data
+        if (data.room && data.updateType === 'userJoined') {
+          console.log('Promise handler resolving for join room')
+          websocketService.offMessage(WebSocketActions.JOIN_ROOM)
+          // Don't remove the roomUpdated handler here - let the event handler keep it
+          resolve(data)
+        }
+      }
+      
+      // Listen for both possible response types
+      websocketService.onMessage(WebSocketActions.JOIN_ROOM, joinRoomHandler)
+      websocketService.onMessage('roomUpdated', roomUpdatedHandler)
+      
+      // Add timeout to prevent hanging
+      setTimeout(() => {
+        console.warn('Join room request timed out')
+        websocketService.offMessage(WebSocketActions.JOIN_ROOM)
+        // Don't remove the roomUpdated handler here - let the event handler keep it
+        resolve({
+          action: WebSocketActions.JOIN_ROOM,
+          success: false,
+          error: 'Join room request timed out'
+        })
+      }, 10000) // 10 second timeout
     })
   },
 
@@ -309,13 +375,28 @@ export const roomWebSocketService = {
   startRoom: async (roomId: string, userId: string): Promise<void> => {
     const message: WebSocketMessage = {
       action: WebSocketActions.START_ROOM,
-      data: { userId },
-      roomId,
-      userId,
+      data: { 
+        userId,
+        roomId
+      },
       timestamp: Date.now()
     }
 
     await websocketService.sendMessage(message)
+  },
+
+  /**
+   * Handle start room message
+   */
+  onStartRoom: (handler: (data: any) => void): void => {
+    websocketService.onMessage(WebSocketActions.ROOM_STARTED, handler)
+  },
+
+  /**
+   * Remove start room handler
+   */
+  offStartRoom: (): void => {
+    websocketService.offMessage(WebSocketActions.ROOM_STARTED)
   }
 }
 
@@ -325,18 +406,32 @@ export const gameWebSocketService = {
    * Make a bid via WebSocket
    */
   makeBid: async (roomId: string, userId: string, bid: {
-    suit: string
-    level: number
+    type: BidType
+    level?: number
+    suit?: Suit | "NT"
   }): Promise<void> => {
+    // Convert bid to server format
+    let bidString: string
+    if (bid.type === "Pass") {
+      bidString = "pass"
+    } else if (bid.type === "Double") {
+      bidString = "double"
+    } else if (bid.type === "Redouble") {
+      bidString = "redouble"
+    } else if (bid.type === "Bid" && bid.level && bid.suit) {
+      const suitMap: Record<string, string> = { "♣": "C", "♦": "D", "♥": "H", "♠": "S", "NT": "NT" }
+      bidString = `${bid.level}${suitMap[bid.suit]}`
+    } else {
+      throw new Error("Invalid bid format")
+    }
+
     const message: WebSocketMessage = {
       action: WebSocketActions.MAKE_BID,
       data: {
-        type: 'bid',
-        bid,
-        playerId: userId
+        bid: bidString,
+        userId: userId,
+        roomId: roomId
       },
-      roomId,
-      userId,
       timestamp: Date.now()
     }
 
@@ -355,10 +450,9 @@ export const gameWebSocketService = {
       data: {
         type: 'play',
         card,
-        playerId: userId
+        userId: userId,
+        roomId: roomId
       },
-      roomId,
-      userId,
       timestamp: Date.now()
     }
 

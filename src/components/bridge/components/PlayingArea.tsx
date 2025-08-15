@@ -12,13 +12,23 @@ export const PlayingArea = ({ gameState }: PlayingAreaProps) => {
       <div className="absolute top-2 left-2">
         <Badge variant="secondary">
           {(() => {
+            console.log('PlayingArea - gameState.currentTrick:', gameState.currentTrick)
+            console.log('PlayingArea - gameState.tricks:', gameState.tricks)
+            console.log('PlayingArea - gameState.tricks?.length:', gameState.tricks?.length)
+            
+            // Defensive check for currentTrick
+            if (!gameState.currentTrick) {
+              console.log('PlayingArea - currentTrick is undefined, returning default')
+              return `Trick ${(gameState.tricks?.length || 0) + 1}`
+            }
             const hasCurrentCards = Object.values(gameState.currentTrick.cards).some(card => card !== null)
+            console.log('PlayingArea - hasCurrentCards:', hasCurrentCards)
             if (hasCurrentCards) {
-              return `Trick ${gameState.tricks.length + 1}`
+              return `Trick ${(gameState.tricks?.length || 0) + 1}`
             } else if (gameState.previousTrick) {
-              return `Previous Trick (${gameState.tricks.length})`
+              return `Previous Trick (${gameState.tricks?.length || 0})`
             } else {
-              return `Trick ${gameState.tricks.length + 1}`
+              return `Trick ${(gameState.tricks?.length || 0) + 1}`
             }
           })()}
         </Badge>
@@ -37,8 +47,18 @@ export const PlayingArea = ({ gameState }: PlayingAreaProps) => {
       <div className="grid grid-cols-3 grid-rows-3 gap-4 w-48 h-48 mx-auto">
         {/* Determine which trick to show - current trick if cards are being played, previous trick if not */}
         {(() => {
+          console.log('PlayingArea - render section - gameState.currentTrick:', gameState.currentTrick)
+          console.log('PlayingArea - render section - gameState.previousTrick:', gameState.previousTrick)
+          
+          // Defensive check for currentTrick
+          if (!gameState.currentTrick) {
+            console.log('PlayingArea - render section - currentTrick is undefined, returning null')
+            return null
+          }
           const hasCurrentCards = Object.values(gameState.currentTrick.cards).some(card => card !== null)
+          console.log('PlayingArea - render section - hasCurrentCards:', hasCurrentCards)
           const trickToShow = hasCurrentCards ? gameState.currentTrick : gameState.previousTrick
+          console.log('PlayingArea - render section - trickToShow:', trickToShow)
           
           if (!trickToShow) return null
           
