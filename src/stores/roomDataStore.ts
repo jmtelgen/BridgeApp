@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useUserStore } from './userStore'
+import { Position } from '../components/bridge/types'
+import { subtractPositions } from '../utils/positionUtils'
 
 interface RoomData {
   roomId: string
@@ -22,17 +24,21 @@ interface RoomData {
 interface RoomDataStore {
   // State
   currentRoom: RoomData | null
-  currentPlayerPosition: string | null // Track which seat the current player is in
+  currentPlayerPosition: Position // Track which seat the current player is in
   
   // Actions
   setCurrentRoom: (room: RoomData) => void
   updateCurrentRoom: (updates: Partial<RoomData>) => void
   clearCurrentRoom: () => void
-  setCurrentPlayerPosition: (position: string) => void
+  setCurrentPlayerPosition: (position: Position) => void
   getPlayerName: (seat: string) => string | null
   getPlayerDisplayName: (seat: string) => string
   isRobot: (playerName: string) => boolean
-  getCurrentPlayerPosition: () => string | null
+  getCurrentPlayerPosition: () => Position  
+  getEastPlayerName: () => String | null
+  getWestPlayerName: () => String | null
+  getNorthPlayerName: () => String | null
+  getDisplayPositionLabel: (displayPosition: Position) => string
 }
 
 export const useRoomDataStore = create<RoomDataStore>()(
@@ -40,7 +46,7 @@ export const useRoomDataStore = create<RoomDataStore>()(
     (set, get) => ({
       // Initial state
       currentRoom: null,
-      currentPlayerPosition: null,
+      currentPlayerPosition: "South",
 
       // Actions
       setCurrentRoom: (room) => {
@@ -54,7 +60,7 @@ export const useRoomDataStore = create<RoomDataStore>()(
       },
 
       clearCurrentRoom: () => {
-        set({ currentRoom: null, currentPlayerPosition: null })
+        set({ currentRoom: null, currentPlayerPosition: "South" })
       },
 
       setCurrentPlayerPosition: (position) => {
@@ -93,6 +99,24 @@ export const useRoomDataStore = create<RoomDataStore>()(
         return playerId.substring(0, 8) + '...'
       },
 
+      getEastPlayerName: () => {
+        const { currentRoom } = get()
+        if (!currentRoom) return null
+        return currentRoom.seats[subtractPositions(get().currentPlayerPosition, "East")] || null
+      },
+
+      getWestPlayerName: () => {
+        const { currentRoom } = get()
+        if (!currentRoom) return null
+        return currentRoom.seats[subtractPositions(get().currentPlayerPosition, "West")] || null
+      },
+      
+      getNorthPlayerName: () => {
+        const { currentRoom } = get()
+        if (!currentRoom) return null
+        return currentRoom.seats[subtractPositions(get().currentPlayerPosition, "North")] || null
+      },
+
       isRobot: (playerName: string) => {
         // Check if the player name indicates it's a robot
         return playerName.toLowerCase().includes('robot') || 
@@ -101,7 +125,15 @@ export const useRoomDataStore = create<RoomDataStore>()(
       },
 
       getCurrentPlayerPosition: () => {
+        console.log('getCurrentPlayerPosition', get().currentPlayerPosition)
         return get().currentPlayerPosition
+      },
+
+      getDisplayPositionLabel: (displayPosition: Position) => {
+        const currentPos = get().currentPlayerPosition
+        // We want: what does the current player see at 'displayPosition'?
+        // This is the opposite of subtractPositions - we need what 'currentPos' looks like from 'displayPosition' perspective
+        return subtractPositions(currentPos, displayPosition)
       }
     }),
     {

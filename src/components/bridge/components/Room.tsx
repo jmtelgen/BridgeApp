@@ -5,18 +5,35 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Users, Plus, LogIn, RefreshCw } from "lucide-react"
-import type { Theme } from "./ThemeSelector"
 import { roomService } from "../../../services"
 import { connectionService } from "../../../services/connectionService"
 import { useUserStore } from "../../../stores/userStore"
 import { useRoomDataStore } from "../../../stores/roomDataStore"
+import { Position } from "../types"
 
-interface RoomManagerProps {
-  theme: Theme
-  onRoomJoined: (roomId: string, playerPosition: string) => void
+// Default theme for the room manager
+const defaultTheme = {
+  colors: {
+    background: "bg-green-50",
+    cardBackground: "bg-white",
+    tableBackground: "bg-green-200",
+    primary: "bg-green-600 text-white",
+    secondary: "bg-green-100 text-green-800",
+    accent: "bg-green-500",
+    text: "text-gray-900",
+    textMuted: "text-gray-600",
+    border: "border-green-300",
+    cardBorder: "border-gray-300",
+    selectedCard: "ring-green-500 bg-green-50",
+    currentPlayer: "bg-green-600 text-white",
+  }
 }
 
-export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
+interface RoomManagerProps {
+  onRoomJoined: (roomId: string, playerPosition: Position) => void
+}
+
+export function RoomManager({ onRoomJoined }: RoomManagerProps) {
   const { playerName: storedPlayerName, setPlayerName } = useUserStore()
   const { setCurrentRoom, setCurrentPlayerPosition } = useRoomDataStore()
   const [activeTab, setActiveTab] = useState<"create" | "join">("create")
@@ -107,7 +124,7 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
         setCurrentRoom(roomData)
         
         // Find which seat the current player is assigned to
-        const seatMapping: Record<string, string> = {
+        const seatMapping: Record<string, Position> = {
           "N": "North",
           "S": "South", 
           "E": "East",
@@ -115,7 +132,7 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
         }
         
         // Find the seat where the current player is assigned
-        let playerPosition = "South" // Default fallback
+        let playerPosition: Position = "South" // Default fallback
         for (const [seatKey, playerId] of Object.entries(roomData.seats)) {
           if (playerId && typeof playerId === 'string' && playerId.includes(playerName.trim())) {
             playerPosition = seatMapping[seatKey] || "South"
@@ -168,7 +185,7 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
         setCurrentRoom(roomData)
         
         // Find which seat the current player is assigned to
-        const seatMapping: Record<string, string> = {
+        const seatMapping: Record<string, Position> = {
           "N": "North",
           "S": "South", 
           "E": "East",
@@ -176,7 +193,7 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
         }
         
         // Find the seat where the current player is assigned
-        let playerPosition = "North" // Default fallback
+        let playerPosition: Position = "North" // Default fallback
         for (const [seatKey, playerName] of Object.entries(roomData.seats)) {
           if (playerName === joinPlayerName.trim()) {
             playerPosition = seatMapping[seatKey] || "North"
@@ -238,7 +255,7 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
       await new Promise(resolve => setTimeout(resolve, 500))
 
       // Find which seat the current player is assigned to
-      const seatMapping: Record<string, string> = {
+      const seatMapping: Record<string, Position> = {
         "N": "North",
         "S": "South", 
         "E": "East",
@@ -246,7 +263,7 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
       }
       
       // Find the seat where the current player is assigned
-      let playerPosition = "East" // Default fallback
+      let playerPosition: Position = "East" // Default fallback
       for (const [seatKey, playerId] of Object.entries(mockRoomData.seats)) {
         if (playerId && typeof playerId === 'string' && playerId.includes(playerName.trim())) {
           playerPosition = seatMapping[seatKey] || "East"
@@ -273,17 +290,17 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
   }
 
   return (
-    <div className={`min-h-screen ${theme.colors.background} p-4`}>
+    <div className={`min-h-screen ${defaultTheme.colors.background} p-4`}>
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className={`text-4xl font-bold mb-2 ${theme.colors.text}`}>Bridge Rooms</h1>
-          <p className={`text-lg ${theme.colors.textMuted}`}>Create or join a bridge game room</p>
+          <h1 className={`text-4xl font-bold mb-2 ${defaultTheme.colors.text}`}>Bridge Rooms</h1>
+          <p className={`text-lg ${defaultTheme.colors.textMuted}`}>Create or join a bridge game room</p>
           
           {/* Active Users Display */}
           <div className="mt-4 flex justify-center items-center gap-2">
             <Users className="w-5 h-5 text-gray-500" />
-            <span className={`text-sm ${theme.colors.textMuted}`}>
+            <span className={`text-sm ${defaultTheme.colors.textMuted}`}>
               {isLoadingConnections ? (
                 "Loading active users..."
               ) : (
@@ -304,7 +321,7 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
 
         {/* Tab Navigation */}
         <div className="flex justify-center mb-6">
-          <div className={`flex ${theme.colors.cardBackground} rounded-lg p-1 border ${theme.colors.border}`}>
+          <div className={`flex ${defaultTheme.colors.cardBackground} rounded-lg p-1 border ${defaultTheme.colors.border}`}>
             <Button
               variant={activeTab === "create" ? "default" : "ghost"}
               onClick={() => setActiveTab("create")}
@@ -330,13 +347,13 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
         {/* Create Room Tab */}
         {activeTab === "create" && (
           <div className="max-w-md mx-auto">
-            <Card className={`${theme.colors.cardBackground} border ${theme.colors.border}`}>
+            <Card className={`${defaultTheme.colors.cardBackground} border ${defaultTheme.colors.border}`}>
               <CardHeader>
-                <CardTitle className={`text-center ${theme.colors.text}`}>Create New Room</CardTitle>
+                <CardTitle className={`text-center ${defaultTheme.colors.text}`}>Create New Room</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="playerName" className={theme.colors.text}>
+                  <Label htmlFor="playerName" className={defaultTheme.colors.text}>
                     Your Name
                   </Label>
                   <Input
@@ -350,7 +367,7 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
                 </div>
 
                 <div>
-                  <Label htmlFor="roomName" className={theme.colors.text}>
+                  <Label htmlFor="roomName" className={defaultTheme.colors.text}>
                     Room Name
                   </Label>
                   <Input
@@ -370,7 +387,7 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
                     onChange={(e) => setIsPrivate(e.target.checked)}
                     className="rounded"
                   />
-                  <Label htmlFor="isPrivate" className={theme.colors.text}>
+                  <Label htmlFor="isPrivate" className={defaultTheme.colors.text}>
                     Private Room
                   </Label>
                 </div>
@@ -388,10 +405,10 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
 
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
-                    <span className={`w-full border-t ${theme.colors.border}`} />
+                    <span className={`w-full border-t ${defaultTheme.colors.border}`} />
                   </div>
                   <div className="relative flex justify-center text-xs uppercase">
-                    <span className={`${theme.colors.background} px-2 ${theme.colors.textMuted}`}>Or</span>
+                    <span className={`${defaultTheme.colors.background} px-2 ${defaultTheme.colors.textMuted}`}>Or</span>
                   </div>
                 </div>
 
@@ -412,13 +429,13 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
         {/* Join Room Tab */}
         {activeTab === "join" && (
           <div className="max-w-md mx-auto">
-            <Card className={`${theme.colors.cardBackground} border ${theme.colors.border}`}>
+            <Card className={`${defaultTheme.colors.cardBackground} border ${defaultTheme.colors.border}`}>
               <CardHeader>
-                <CardTitle className={`text-center ${theme.colors.text}`}>Join Existing Room</CardTitle>
+                <CardTitle className={`text-center ${defaultTheme.colors.text}`}>Join Existing Room</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="joinPlayerName" className={theme.colors.text}>
+                  <Label htmlFor="joinPlayerName" className={defaultTheme.colors.text}>
                     Your Name
                   </Label>
                   <Input
@@ -432,7 +449,7 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
                 </div>
 
                 <div>
-                  <Label htmlFor="roomId" className={theme.colors.text}>
+                  <Label htmlFor="roomId" className={defaultTheme.colors.text}>
                     Room ID
                   </Label>
                   <Input
@@ -459,11 +476,11 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
 
         {/* Info Cards */}
         <div className="grid md:grid-cols-2 gap-6 mt-8 max-w-4xl mx-auto">
-          <Card className={`${theme.colors.cardBackground} border ${theme.colors.border}`}>
+          <Card className={`${defaultTheme.colors.cardBackground} border ${defaultTheme.colors.border}`}>
             <CardHeader>
-              <CardTitle className={`text-lg ${theme.colors.text}`}>How to Create a Room</CardTitle>
+              <CardTitle className={`text-lg ${defaultTheme.colors.text}`}>How to Create a Room</CardTitle>
             </CardHeader>
-            <CardContent className={theme.colors.textMuted}>
+            <CardContent className={defaultTheme.colors.textMuted}>
               <ul className="space-y-2 text-sm">
                 <li>• Enter your name and a room name</li>
                 <li>• Choose if the room should be private</li>
@@ -473,11 +490,11 @@ export function RoomManager({ theme, onRoomJoined }: RoomManagerProps) {
             </CardContent>
           </Card>
 
-          <Card className={`${theme.colors.cardBackground} border ${theme.colors.border}`}>
+          <Card className={`${defaultTheme.colors.cardBackground} border ${defaultTheme.colors.border}`}>
             <CardHeader>
-              <CardTitle className={`text-lg ${theme.colors.text}`}>How to Join a Room</CardTitle>
+              <CardTitle className={`text-lg ${defaultTheme.colors.text}`}>How to Join a Room</CardTitle>
             </CardHeader>
-            <CardContent className={theme.colors.textMuted}>
+            <CardContent className={defaultTheme.colors.textMuted}>
               <ul className="space-y-2 text-sm">
                 <li>• Get a room ID from a friend</li>
                 <li>• Enter your name and the room ID</li>

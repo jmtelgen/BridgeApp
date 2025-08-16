@@ -328,9 +328,50 @@ export function useWebSocketMessages(roomId: string | undefined) {
         
         console.log('Bid made - final currentPlayer before updateGameState:', gameData.currentPlayer)
         
+        // Convert server bids to frontend bid format
+        let convertedBids: any[] = []
+        if (gameData.bids && Array.isArray(gameData.bids)) {
+          convertedBids = gameData.bids.map((serverBid: ServerBid) => {
+            // Convert seat from server format (E) to frontend format (East)
+            const seatMap: Record<string, Position> = { N: 'North', E: 'East', S: 'South', W: 'West' }
+            const frontendSeat = seatMap[serverBid.seat] || 'North'
+            
+            // Convert bid string (4H) to bid object
+            let bidType: 'Pass' | 'Double' | 'Redouble' | 'Bid' = 'Pass'
+            let level: number | undefined
+            let suit: string | undefined
+            
+            if (serverBid.bid === 'pass') {
+              bidType = 'Pass'
+            } else if (serverBid.bid === 'double') {
+              bidType = 'Double'
+            } else if (serverBid.bid === 'redouble') {
+              bidType = 'Redouble'
+            } else {
+              // Parse bid like "4H" -> level: 4, suit: "♥"
+              const match = serverBid.bid.match(/^(\d+)([CDHSNT]+)$/)
+              if (match) {
+                level = parseInt(match[1])
+                const suitChar = match[2]
+                const suitMap: Record<string, string> = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' }
+                suit = suitMap[suitChar] || suitChar
+                bidType = 'Bid'
+              }
+            }
+            
+            return {
+              type: bidType,
+              level: bidType === 'Bid' ? level : bidType,
+              suit: bidType === 'Bid' ? suit : undefined,
+              player: frontendSeat
+            }
+          })
+        }
+        
         // Convert ServerGameData to GameState format
         const convertedGameState = {
           ...gameData,
+          bids: convertedBids, // Use converted bids instead of server bids
           // Add missing GameState properties with defaults
           dealer: "North" as Position,
           previousTrick: null,
@@ -399,8 +440,8 @@ export function useWebSocketMessages(roomId: string | undefined) {
           console.log('Start room - room data structure:', data.room)
           
           // Find which seat this user is assigned to
-          const seatMapping: Record<string, string> = { N: 'North', S: 'South', E: 'East', W: 'West' }
-          let playerPosition: string | null = null
+          const seatMapping: Record<string, Position> = { N: 'North', S: 'South', E: 'East', W: 'West' }
+          let playerPosition: Position | null = null
           
           for (const [seatKey, playerId] of Object.entries(data.room.seats)) {
             console.log(`Start room - checking seat ${seatKey}: ${playerId} vs userId: ${userId}`)

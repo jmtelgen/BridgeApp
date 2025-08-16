@@ -91,7 +91,7 @@ src/
 ├── services/           # API and external services
 ├── stores/             # Zustand state stores
 │   ├── userStore.ts    # User ID and player name management
-│   └── roomStore.ts    # Room state management
+│   └── roomDataStore.ts    # Room data and player position management
 ├── types/              # TypeScript type definitions
 ├── utils/              # Utility functions
 │   └── userUtils.ts    # User management utilities

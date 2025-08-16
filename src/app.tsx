@@ -2,21 +2,18 @@ import { useEffect, useState } from 'react';
 import { Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { RoomManager } from './components/bridge/components/Room';
 import { RoomGame } from './components/bridge/components/RoomGame';
-import { useRoomStore } from './stores/roomStore';
 import { useRoomDataStore } from './stores/roomDataStore';
 import { useUserStore } from './stores/userStore';
 import { Toaster } from './components/ui/toaster';
 import { websocketService } from './services/websocketService';
 import { useWebSocketCleanup } from './hooks/useWebSocketCleanup';
+import { Position } from './components/bridge/types';
 
 // Room component that shows at the root
 function RoomPage() {
   const navigate = useNavigate();
-  const { theme, addValidRoom } = useRoomStore();
 
-  const handleRoomJoined = (roomId: string, playerPosition: string) => {
-    // Add the room to valid rooms before navigating
-    addValidRoom(roomId);
+  const handleRoomJoined = (roomId: string, playerPosition: Position) => {
     // Navigate to the room with the room ID
     navigate(`/room/${roomId}`);
   };
@@ -30,7 +27,7 @@ function RoomPage() {
 
   return (
     <div>
-      <RoomManager theme={theme} onRoomJoined={handleRoomJoined} />
+      <RoomManager onRoomJoined={handleRoomJoined} />
     </div>
   );
 }
@@ -39,7 +36,6 @@ function RoomPage() {
 function RoomGameWrapper() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
-  const { isValidRoom, addValidRoom } = useRoomStore();
   const { currentRoom } = useRoomDataStore();
   const [isLoading, setIsLoading] = useState(true);
 
@@ -54,19 +50,13 @@ function RoomGameWrapper() {
 
     // If we have room data for this roomId, consider it valid
     if (currentRoom && currentRoom.roomId === roomId) {
-      addValidRoom(roomId);
       setIsLoading(false);
       return;
     }
 
-    // Check if the user has valid access to this room
-    if (!isValidRoom(roomId)) {
-      // Redirect back to room screen if they don't have valid access
-      navigate('/', { replace: true });
-    } else {
-      setIsLoading(false);
-    }
-  }, [roomId, isValidRoom, currentRoom, addValidRoom, navigate]);
+    // Simple loading state
+    setIsLoading(false);
+  }, [roomId, currentRoom]);
 
   // Show loading state while checking room access
   if (isLoading) {
@@ -78,11 +68,6 @@ function RoomGameWrapper() {
         </div>
       </div>
     );
-  }
-
-  // Don't render the game if the user doesn't have valid access
-  if (!roomId || !isValidRoom(roomId)) {
-    return null; // Will redirect in useEffect
   }
   
   return <RoomGame />;

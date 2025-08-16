@@ -35,9 +35,9 @@ export const BiddingArea = ({ onMakeBid }: BiddingAreaProps) => {
   }
 
   // Check if current player is human and it's their turn to bid
-  const currentPlayerPosition = getCurrentPlayerPosition() as Position | null
+  const currentPlayerPosition = getCurrentPlayerPosition()
   const currentPlayerSeat = currentPlayerPosition ? getSeatKey(currentPlayerPosition) : null
-  const currentPlayerName = currentPlayerSeat ? getPlayerDisplayName(currentPlayerSeat) : null
+  const currentPlayerName = currentPlayerSeat ? getPlayerDisplayName(currentPlayerSeat) : "Unknown Player"
   const isCurrentPlayerHuman = currentPlayerName ? !isRobot(currentPlayerName) : false
   const isCurrentUserTurn = currentPlayerPosition === gameState.currentPlayer
   
@@ -86,7 +86,9 @@ export const BiddingArea = ({ onMakeBid }: BiddingAreaProps) => {
                       ? "X"
                       : bid.type === "Redouble"
                         ? "XX"
-                        : `${bid.level}${bid.suit}`}
+                        : bid.type === "Bid" && typeof bid.level === "number" && bid.suit
+                          ? `${bid.level}${bid.suit}`
+                          : "Invalid Bid"}
                 </div>
               ))}
             </>

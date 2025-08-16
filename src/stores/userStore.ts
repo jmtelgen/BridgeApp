@@ -4,8 +4,10 @@ import { persist } from 'zustand/middleware'
 interface UserStore {
   userId: string | null
   playerName: string | null
+  position: "N" | "S" | "E" | "W" | null
   generateUserId: () => string
   setPlayerName: (name: string) => void
+  setPosition: (position: "N" | "S" | "E" | "W") => void
   clearUser: () => void
 }
 
@@ -22,6 +24,7 @@ export const useUserStore = create<UserStore>()(
     (set, get) => ({
       userId: null,
       playerName: null,
+      position: null,
 
       generateUserId: () => {
         const currentUserId = get().userId
@@ -39,15 +42,19 @@ export const useUserStore = create<UserStore>()(
         set({ playerName: name })
       },
 
+      setPosition: (position: "N" | "S" | "E" | "W") => {
+        set({ position })
+      },
+
       clearUser: () => {
-        set({ userId: null, playerName: null })
+        set({ userId: null, playerName: null, position: null })
       }
     }),
     {
       name: 'bridge-user-storage', // localStorage key
       partialize: (state) => ({ 
         userId: state.userId,
-        playerName: state.playerName 
+        playerName: state.playerName,
       })
     }
   )
