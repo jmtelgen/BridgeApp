@@ -89,16 +89,7 @@ export default function LoginPage() {
 
       <div className="absolute inset-0 backdrop-blur-sm bg-white/10 dark:bg-black/20"></div>
 
-      <div className="relative z-10 flex items-center justify-center p-4 min-h-screen">
-        {/* Back to Home Link */}
-        <div className="absolute top-4 left-4">
-          <Link to="/">
-            <Button variant="ghost" size="sm" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
-              ← Back to Home
-            </Button>
-          </Link>
-        </div>
-        
+      <div className="relative z-10 flex items-center justify-center p-4 min-h-screen">       
         <Card className="w-full max-w-md bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 shadow-2xl">
           <CardHeader className="text-center space-y-4">
             <div className="mx-auto w-16 h-16 bg-gradient-to-br from-pink-400 to-purple-600 rounded-full flex items-center justify-center shadow-lg">

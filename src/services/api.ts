@@ -38,10 +38,28 @@ export async function apiCall<T>(
     errorMessage = 'An error occurred'
   } = options
 
+  // Check if token is expired before making request
+  try {
+    const { tokenManager } = await import('./tokenManager')
+    if (tokenManager.isTokenExpired()) {
+      console.warn('Token expired, redirecting to login...')
+      window.location.href = '/login'
+      return {
+        data: null,
+        error: 'Token expired',
+        success: false
+      }
+    }
+  } catch (error) {
+    // If token manager fails to load, continue with request
+    console.warn('Could not check token status:', error)
+  }
+
   // Prefix with /api if not already present
   const apiUrl = url.startsWith('/api') ? url : `/api${url}`
 
   try {
+    console.log('Making API request to:', apiUrl)
     const response = await fetch(apiUrl, {
       method,
       headers: {
@@ -49,9 +67,29 @@ export async function apiCall<T>(
         ...headers,
       },
       body: body ? JSON.stringify(body) : undefined,
+      redirect: 'follow', // Follow redirects automatically
+    })
+    
+    console.log('Response received:', {
+      status: response.status,
+      statusText: response.statusText,
+      url: response.url
     })
 
     if (!response.ok) {
+      // Handle 401 Unauthorized responses specifically
+      if (response.status === 401) {
+        console.log('Authentication required (401), redirecting to login...')
+        // Redirect the user to the login page
+        window.location.href = '/login'
+        
+        return {
+          data: null,
+          error: 'Authentication required',
+          success: false
+        }
+      }
+      
       let errorData: any = null
       try {
         errorData = await response.json()
@@ -74,12 +112,27 @@ export async function apiCall<T>(
       }
     }
 
-    let data: T | null = null
+    let rawData: any = null
     try {
-      data = await response.json()
+      rawData = await response.json()
     } catch {
       // If response is not JSON, that's okay for some endpoints
-      data = null
+      rawData = null
+    }
+    
+    // Handle AWS Lambda/API Gateway response format
+    let data: T | null = null
+    if (rawData && typeof rawData === 'object') {
+      if (rawData.body) {
+        try {
+          data = typeof rawData.body === 'string' ? JSON.parse(rawData.body) : rawData.body
+        } catch (e) {
+          console.error('Failed to parse response body:', e)
+          data = null
+        }
+      } else {
+        data = rawData
+      }
     }
 
     if (showSuccess) {

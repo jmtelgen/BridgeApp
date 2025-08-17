@@ -79,9 +79,19 @@ export const useUserStore = create<UserStore>()(
       // Authentication methods
       setAuthData: (accessToken: string, user: User) => {
         set({ isAuthenticated: true, accessToken, user })
+        
+        // Initialize token monitoring when user logs in
+        import('../services/tokenManager').then(({ tokenManager }) => {
+          tokenManager.initialize()
+        })
       },
       clearAuthData: () => {
         set({ isAuthenticated: false, accessToken: null, user: null })
+        
+        // Stop token monitoring when user logs out
+        import('../services/tokenManager').then(({ tokenManager }) => {
+          tokenManager.stopTokenMonitoring()
+        })
       },
       getAccessToken: () => {
         return get().accessToken
@@ -93,6 +103,12 @@ export const useUserStore = create<UserStore>()(
         // In a real application, you would call an auth service to log out
         // For now, we'll just clear the data locally
         set({ isAuthenticated: false, accessToken: null, user: null })
+        
+        // Stop token monitoring
+        import('../services/tokenManager').then(({ tokenManager }) => {
+          tokenManager.stopTokenMonitoring()
+        })
+        
         console.log('User logged out.')
       }
     }),

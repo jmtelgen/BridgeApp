@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react"
-import { Link } from "react-router-dom"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Users, Plus, LogIn, RefreshCw, UserPlus } from "lucide-react"
+import { Loader2, Users, Plus, RefreshCw, DoorOpen } from "lucide-react"
 import { roomService } from "../../../services"
 import { connectionService } from "../../../services/connectionService"
 import { useUserStore } from "../../../stores/userStore"
@@ -298,21 +298,7 @@ export function RoomManager({ onRoomJoined }: RoomManagerProps) {
           <h1 className={`text-4xl font-bold mb-2 ${defaultTheme.colors.text}`}>Bridge Rooms</h1>
           <p className={`text-lg ${defaultTheme.colors.textMuted}`}>Create or join a bridge game room</p>
           
-          {/* Auth Navigation */}
-          <div className="mt-4 flex justify-center items-center gap-3">
-            <Link to="/login">
-              <Button variant="outline" size="sm" className="flex items-center gap-2">
-                <LogIn className="w-4 h-4" />
-                Sign In
-              </Button>
-            </Link>
-            <Link to="/create-account">
-              <Button size="sm" className="flex items-center gap-2 bg-gradient-to-r from-yellow-500 via-pink-600 to-purple-600 hover:from-yellow-400 hover:via-pink-500 hover:to-purple-500">
-                <UserPlus className="w-4 h-4" />
-                Create Account
-              </Button>
-            </Link>
-          </div>
+
           
           {/* Active Users Display */}
           <div className="mt-4 flex justify-center items-center gap-2">
@@ -352,7 +338,7 @@ export function RoomManager({ onRoomJoined }: RoomManagerProps) {
               onClick={() => setActiveTab("join")}
               className="flex items-center gap-2"
             >
-              <LogIn className="w-4 h-4" />
+              <DoorOpen className="w-4 h-4" />
               Join Room
             </Button>
           </div>
@@ -483,7 +469,7 @@ export function RoomManager({ onRoomJoined }: RoomManagerProps) {
                   disabled={isLoading}
                   className="w-full flex items-center justify-center gap-2"
                 >
-                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <DoorOpen className="w-4 h-4" />}
                   {isLoading ? "Joining..." : "Join Room"}
                 </Button>
               </CardContent>
