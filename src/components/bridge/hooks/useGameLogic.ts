@@ -3,7 +3,7 @@ import { useGameStore } from '../../../stores/gameStore'
 
 export const useGameLogic = () => {
   const {
-    gameState,
+    gameData: gameState,
     selectedCard,
     setSelectedCard,
     aiThinking,

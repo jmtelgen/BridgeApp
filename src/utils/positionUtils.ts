@@ -29,8 +29,8 @@ export function subtractPositions(a: Position, b: Position): Position {
   const relativePositions: Record<Position, Partial<Record<Position, Position>>> = {
     "North": {
       "South": "North",  // From South's view, North is North
-      "East": "West",    // From East's view, North is West
-      "West": "East"     // From West's view, North is East
+      "East": "East",    // From East's view, North is West
+      "West": "West"     // From West's view, North is East
     },
     "South": {
       "North": "North",  // From North's view, South is North

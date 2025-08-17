@@ -445,13 +445,17 @@ export const gameWebSocketService = {
     suit: string
     rank: string
   }): Promise<void> => {
+    // Convert suit icons to letters and card to backend format (e.g., "AH" for Ace of Hearts)
+    const suitMap: Record<string, string> = { "♣": "C", "♦": "D", "♥": "H", "♠": "S", "NT": "NT" }
+    const suitLetter = suitMap[card.suit] || card.suit
+    const cardString = card.rank + suitLetter
+    
     const message: WebSocketMessage = {
       action: WebSocketActions.PLAY_CARD,
       data: {
-        type: 'play',
-        card,
         userId: userId,
-        roomId: roomId
+        roomId: roomId,
+        card: cardString
       },
       timestamp: Date.now()
     }

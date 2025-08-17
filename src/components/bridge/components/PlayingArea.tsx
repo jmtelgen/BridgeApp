@@ -1,14 +1,22 @@
 import { Badge } from "@/components/ui/badge"
 import { Card } from './Card'
-import { PlayingCard, Position, GameState } from '../types'
+import { PlayingCard, Position, GameData } from '../types'
 
 interface PlayingAreaProps {
-  gameState: GameState
+  gameState: GameData
 }
 
 export const PlayingArea = ({ gameState }: PlayingAreaProps) => {
   return (
     <div className="bg-green-100 rounded-lg p-8 shadow-sm border relative">
+      {/* Turn indicator - prominently displayed at the top center */}
+      <div className="text-center mb-4">
+        <div className="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg shadow-md">
+          <span className="font-semibold">Current Turn: </span>
+          <span className="font-bold text-lg">{gameState.currentPlayer}</span>
+        </div>
+      </div>
+      
       <div className="absolute top-2 left-2">
         <Badge variant="secondary">
           {(() => {

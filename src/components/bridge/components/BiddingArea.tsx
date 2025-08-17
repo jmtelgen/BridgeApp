@@ -14,8 +14,15 @@ export const BiddingArea = ({ onMakeBid }: BiddingAreaProps) => {
   const [selectedBidSuit, setSelectedBidSuit] = useState<Suit | "NT" | null>(null)
   
   // Get data from stores
-  const { gameState, aiThinking } = useGameStore()
+  const { gameData, aiThinking } = useGameStore()
   const { getCurrentPlayerPosition, getPlayerDisplayName, isRobot } = useRoomDataStore()
+
+  // Safety check - ensure gameData exists
+  if (!gameData) {
+    return <div className="bg-white rounded-lg p-4 shadow-sm border">
+      <h3 className="font-semibold mb-3 text-center">Loading Bidding Area...</h3>
+    </div>
+  }
 
   const handleBidClick = (type: BidType, level?: number, suit?: Suit | "NT") => {
     onMakeBid(type, level, suit)
@@ -39,10 +46,10 @@ export const BiddingArea = ({ onMakeBid }: BiddingAreaProps) => {
   const currentPlayerSeat = currentPlayerPosition ? getSeatKey(currentPlayerPosition) : null
   const currentPlayerName = currentPlayerSeat ? getPlayerDisplayName(currentPlayerSeat) : "Unknown Player"
   const isCurrentPlayerHuman = currentPlayerName ? !isRobot(currentPlayerName) : false
-  const isCurrentUserTurn = currentPlayerPosition === gameState.currentPlayer
+  const isCurrentUserTurn = currentPlayerPosition === gameData.currentPlayer
   
   // Debug logging
-  console.log('BiddingArea - gameState.currentPlayer:', gameState.currentPlayer)
+  console.log('BiddingArea - gameData.currentPlayer:', gameData.currentPlayer)
   console.log('BiddingArea - currentPlayerPosition:', currentPlayerPosition)
   console.log('BiddingArea - isCurrentUserTurn:', isCurrentUserTurn)
   console.log('BiddingArea - isCurrentPlayerHuman:', isCurrentPlayerHuman)
@@ -57,9 +64,9 @@ export const BiddingArea = ({ onMakeBid }: BiddingAreaProps) => {
         {/* Determine the bidding order starting from the first bidder */}
         {(() => {
           const positions: Position[] = ["North", "East", "South", "West"]
-          const firstBidderIndex = positions.indexOf(gameState.dealer === "West" ? "North" : 
-                                                   gameState.dealer === "North" ? "East" : 
-                                                   gameState.dealer === "East" ? "South" : "West")
+          const firstBidderIndex = positions.indexOf(gameData.dealer === "West" ? "North" : 
+                                                   gameData.dealer === "North" ? "East" : 
+                                                   gameData.dealer === "East" ? "South" : "West")
           
           const biddingOrder = [
             positions[firstBidderIndex],
@@ -73,12 +80,12 @@ export const BiddingArea = ({ onMakeBid }: BiddingAreaProps) => {
               {biddingOrder.map((position) => (
                 <div key={position} className="font-semibold text-center">
                   {position}
-                  {gameState.dealer === position && (
+                  {gameData.dealer === position && (
                     <span className="text-blue-600 text-xs block">(Dealer)</span>
                   )}
                 </div>
               ))}
-              {gameState.bids.map((bid, index) => (
+              {gameData.bids.map((bid: Bid, index: number) => (
                 <div key={index} className="text-center p-1 bg-gray-50 rounded">
                   {bid.type === "Pass"
                     ? "Pass"
@@ -181,7 +188,7 @@ export const BiddingArea = ({ onMakeBid }: BiddingAreaProps) => {
       )}
 
       {/* AI players will bid automatically */}
-      {!isCurrentPlayerHuman && gameState.phase === "bidding" && aiThinking && (
+      {!isCurrentPlayerHuman && gameData.phase === "bidding" && aiThinking && (
         <div className="text-center text-sm text-gray-600">
           <div>
             {currentPlayerName} is thinking...

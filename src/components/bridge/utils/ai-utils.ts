@@ -1,4 +1,4 @@
-import { PlayingCard, Position, Suit, Rank, Bid, Trick, GameState } from '../types'
+import { PlayingCard, Position, Suit, Rank, Bid, Trick, GameData } from '../types'
 import { solveBoardFromStart, solveBoard, DDSSolution } from '../dds/double-dummy-solver'
 
 // Convert between display suits and solver suits
@@ -156,7 +156,7 @@ const cardValues: Record<Rank, number> = {
 
 // AI bidding using double dummy solver (DISABLED - now using SAYC bidding)
 /*
-export const aiBid = async (gameState: GameState): Promise<Bid> => {
+export const aiBid = async (gameState: GameData): Promise<Bid> => {
   // For now, just pass to avoid WASM loading issues
   console.log('AI bidding: Pass (double dummy solver disabled)');
   
@@ -261,7 +261,7 @@ export const aiBid = async (gameState: GameState): Promise<Bid> => {
 */
 
 // AI playing using double dummy solver
-export const aiPlay = async (gameState: GameState): Promise<PlayingCard> => {
+export const aiPlay = async (gameState: GameData): Promise<PlayingCard> => {
   try {
     console.log('AI playing - gameState:', gameState);
     console.log('AI playing - currentPlayer:', gameState.currentPlayer);

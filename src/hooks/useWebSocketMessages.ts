@@ -58,7 +58,7 @@ interface RoomStartedMessage {
 
 export function useWebSocketMessages(roomId: string | undefined) {
   const { updateCurrentRoom } = useRoomDataStore()
-  const { gameState, setAiThinking } = useGameStore()
+  const { gameData, setAiThinking } = useGameStore()
 
   // Add global error handler to catch length errors
   useEffect(() => {
@@ -67,7 +67,7 @@ export function useWebSocketMessages(roomId: string | undefined) {
       if (args[0] && typeof args[0] === 'string' && args[0].includes('length')) {
         console.log('LENGTH ERROR DETECTED!')
         console.log('Error args:', args)
-        console.log('Current game state:', useGameStore.getState().gameState)
+        console.log('Current game data:', useGameStore.getState().gameData)
         console.log('Current room state:', useRoomDataStore.getState().currentRoom)
       }
       originalError.apply(console, args)
@@ -160,25 +160,20 @@ export function useWebSocketMessages(roomId: string | undefined) {
 
     // Game state update handlers
     const handleGameStateUpdate = (data: any) => {
-      console.log('Received game state update:', data)
-      console.log('Game state update - data.gameState:', data.gameState)
-      console.log('Game state update - data.gameState?.currentTrick:', data.gameState?.currentTrick)
-      console.log('Game state update - data.gameState?.tricks:', data.gameState?.tricks)
-      console.log('Game state update - data.gameState?.tricks?.length:', data.gameState?.tricks?.length)
       
-      if (data.gameState) {
-        // Update the game state in the store
-        useGameStore.getState().updateGameState(data.gameState)
+      if (data.gameData) {
+        // Update the game data in the store
+        useGameStore.getState().updateGameData(data.gameData)
         
-        // Clear AI thinking state if game state was updated externally
+        // Clear AI thinking state if game data was updated externally
         setAiThinking(false)
       }
     }
 
     const handleBidUpdate = (data: any) => {
       console.log('Received bid update:', data)
-      if (data.gameState) {
-        useGameStore.getState().updateGameState(data.gameState)
+      if (data.gameData) {
+        useGameStore.getState().updateGameData(data.gameData)
         setAiThinking(false)
       }
     }
@@ -368,11 +363,11 @@ export function useWebSocketMessages(roomId: string | undefined) {
           })
         }
         
-        // Convert ServerGameData to GameState format
-        const convertedGameState = {
+        // Convert ServerGameData to GameData format
+        const convertedGameData = {
           ...gameData,
           bids: convertedBids, // Use converted bids instead of server bids
-          // Add missing GameState properties with defaults
+          // Add missing GameData properties with defaults
           dealer: "North" as Position,
           previousTrick: null,
           contract: null,
@@ -383,50 +378,217 @@ export function useWebSocketMessages(roomId: string | undefined) {
         } as any // Type assertion since we know the structure will be correct
         
         // Final safety check: if we're receiving a bidMade message, we should not be in completed phase
-        if (convertedGameState.phase === "completed") {
+        if (convertedGameData.phase === "completed") {
           console.log('Bid made - final safety check: correcting phase from completed to bidding')
-          convertedGameState.phase = "bidding"
+          convertedGameData.phase = "bidding"
         }
         
-        useGameStore.getState().updateGameState(convertedGameState)
-        console.log('Bid made - final game state after update:', useGameStore.getState().gameState)
-        console.log('Bid made - final currentPlayer:', useGameStore.getState().gameState.currentPlayer)
+        useGameStore.getState().updateGameData(convertedGameData)
+        console.log('Bid made - final game state after update:', useGameStore.getState().gameData)
+        console.log('Bid made - final currentPlayer:', useGameStore.getState().gameData.currentPlayer)
         setAiThinking(false)
       }
     }
 
     const handleCardPlayed = (data: any) => {
       console.log('Received card played update:', data)
-      if (data.gameState) {
-        useGameStore.getState().updateGameState(data.gameState)
+      
+      // Handle gameData if provided (server format)
+      if (data.gameData) {
+        console.log('Card played - processing gameData:', data.gameData)
+        
+        // Convert gameData to the expected format
+        const gameData = data.gameData
+        
+        // Ensure hands are properly formatted for frontend
+        if (gameData.hands) {
+          const hands = gameData.hands
+          if (typeof hands === 'object' && !Array.isArray(hands)) {
+            // Convert from server format (N, E, S, W) to frontend format (North, East, South, West)
+            const positionMap = { N: 'North', E: 'East', S: 'South', W: 'West' }
+            const convertedHands: Record<string, any[]> = {}
+            
+            Object.entries(hands).forEach(([key, cards]) => {
+              const frontendPosition = positionMap[key as keyof typeof positionMap]
+              if (frontendPosition && Array.isArray(cards)) {
+                convertedHands[frontendPosition] = cards.map(cardString => {
+                  // Handle "10" cards correctly
+                  let rank: string
+                  let suitChar: string
+                  
+                  if (cardString.startsWith('10')) {
+                    rank = '10'
+                    suitChar = cardString.slice(2) // Take everything after "10"
+                  } else {
+                    rank = cardString.slice(0, -1)
+                    suitChar = cardString.slice(-1)
+                  }
+                  
+                  const suitMap: Record<string, string> = { D: '♦', C: '♣', H: '♥', S: '♠' }
+                  const suit = suitMap[suitChar] || suitChar
+                  const valueMap: Record<string, number> = { 'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2 }
+                  const value = valueMap[rank] || parseInt(rank)
+                  return { suit, rank, value }
+                })
+              }
+            })
+            gameData.hands = convertedHands
+          }
+        }
+        
+        // Convert currentPhase to phase if needed
+        if (gameData.currentPhase && !gameData.phase) {
+          gameData.phase = gameData.currentPhase
+        }
+        
+        // Convert turn to currentPlayer if needed
+        if (data.turn && !gameData.currentPlayer) {
+          // Convert user ID to position by checking which position this user is assigned to
+          const { currentRoom } = useRoomDataStore.getState()
+          if (currentRoom) {
+            // Find which seat this user is assigned to
+            const seatMapping: Record<string, string> = { N: 'North', S: 'South', E: 'East', W: 'West' }
+            for (const [seatKey, playerId] of Object.entries(currentRoom.seats)) {
+              if (playerId && data.turn.includes(playerId)) {
+                gameData.currentPlayer = seatMapping[seatKey] || 'North'
+                console.log('Card played - converted turn to currentPlayer:', data.turn, '->', gameData.currentPlayer)
+                break
+              }
+            }
+          }
+        }
+        
+        // Convert currentTrick from array format to object format
+        if (gameData.currentTrick && Array.isArray(gameData.currentTrick)) {
+          // Convert array format to object format
+          const trickArray = gameData.currentTrick
+          const convertedTrick: any = {
+            cards: { North: null, East: null, South: null, West: null },
+            winner: null,
+            ledSuit: null,
+            trickLeader: null
+          }
+          
+          // Process the trick array to extract cards and determine ledSuit
+          if (trickArray.length > 0) {
+            // Find the first card played to determine ledSuit and trickLeader
+            const firstCard = trickArray[0]
+            if (firstCard && firstCard.seat && firstCard.card) {
+              const seatMapping: Record<string, string> = { N: 'North', S: 'South', E: 'East', W: 'West' }
+              const frontendSeat = seatMapping[firstCard.seat] || 'North'
+              convertedTrick.trickLeader = frontendSeat
+              
+              // Extract suit from card (e.g., "AH" -> "♥")
+              const cardString = firstCard.card
+              let suit: string
+              if (cardString.endsWith('H')) suit = '♥'
+              else if (cardString.endsWith('S')) suit = '♠'
+              else if (cardString.endsWith('D')) suit = '♦'
+              else if (cardString.endsWith('C')) suit = '♣'
+              else suit = 'NT'
+              
+              convertedTrick.ledSuit = suit
+              
+              // Convert all cards in the trick
+              trickArray.forEach((trickCard: any) => {
+                if (trickCard.seat && trickCard.card) {
+                  const frontendSeat = seatMapping[trickCard.seat] || 'North'
+                  
+                  // Convert card string to card object
+                  const cardString = trickCard.card
+                  let rank: string
+                  let suitChar: string
+                  
+                  if (cardString.startsWith('10')) {
+                    rank = '10'
+                    suitChar = cardString.slice(2)
+                  } else {
+                    rank = cardString.slice(0, -1)
+                    suitChar = cardString.slice(-1)
+                  }
+                  
+                  const suitMap: Record<string, string> = { D: '♦', C: '♣', H: '♥', S: '♠' }
+                  const suit = suitMap[suitChar] || suitChar
+                  const valueMap: Record<string, number> = { 'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2 }
+                  const value = valueMap[rank] || parseInt(rank)
+                  
+                  convertedTrick.cards[frontendSeat as keyof typeof convertedTrick.cards] = { suit, rank, value }
+                }
+              })
+            }
+          }
+          
+          gameData.currentTrick = convertedTrick
+        }
+        
+        // Convert contract from string to object format
+        if (gameData.contract && typeof gameData.contract === 'string') {
+          const contractString = gameData.contract
+          const match = contractString.match(/^(\d+)([CDHSNT]+)$/)
+          if (match) {
+            const level = parseInt(match[1])
+            const suitChar = match[2]
+            const suitMap: Record<string, string> = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' }
+            const suit = suitMap[suitChar] || suitChar
+            
+            const seatMapping: Record<string, string> = { N: 'North', S: 'South', E: 'East', W: 'West' }
+            gameData.contract = {
+              level,
+              suit,
+              declarer: gameData.declarer ? seatMapping[gameData.declarer] || 'North' : 'North',
+              doubled: false,
+              redoubled: false
+            }
+          }
+        }
+        
+        // Convert declarer and openingLeader to frontend format
+        if (gameData.declarer) {
+          const seatMapping: Record<string, string> = { N: 'North', S: 'South', E: 'East', W: 'West' }
+          gameData.declarer = seatMapping[gameData.declarer] || 'North'
+        }
+        
+        if (gameData.openingLeader) {
+          const seatMapping: Record<string, string> = { N: 'North', S: 'South', E: 'East', W: 'West' }
+          gameData.openingLeader = seatMapping[gameData.openingLeader] || 'North'
+        }
+        
+        // Convert ServerGameData to GameData format
+        const convertedGameData = {
+          ...gameData,
+          // Add missing GameData properties with defaults
+          dealer: "North" as Position,
+          previousTrick: null,
+          contract: null,
+          dummy: null,
+          firstCardPlayed: true, // Since a card was just played
+          gameNumber: 1,
+          vulnerability: { NS: false, EW: false }
+        } as any // Type assertion since we know the structure will be correct
+        
+        console.log('Card played - converted game state:', convertedGameData)
+        useGameStore.getState().updateGameData(convertedGameData)
         setAiThinking(false)
       }
     }
 
     const handleGameStarted = (data: any) => {
       console.log('Game started:', data)
-      if (data.gameState) {
-        useGameStore.getState().updateGameState(data.gameState)
+      if (data.gameData) {
+        useGameStore.getState().updateGameData(data.gameData)
         setAiThinking(false)
       }
     }
 
     const handleGameCompleted = (data: any) => {
       console.log('Game completed:', data)
-      if (data.gameState) {
-        useGameStore.getState().updateGameState(data.gameState)
+      if (data.gameData) {
+        useGameStore.getState().updateGameData(data.gameData)
         setAiThinking(false)
       }
     }
 
     const handleStartRoom = (data: RoomStartedMessage) => {
-      console.log('Start room:', data)
-      console.log('Start room - data.gameState:', (data as any).gameState)
-      console.log('Start room - data.gameData:', data.gameData)
-      if (data.gameState) {
-        useGameStore.getState().updateGameState(data.gameState)
-        setAiThinking(false)
-      }
       
       // Update room data if provided
       if (data.room) {
@@ -435,19 +597,14 @@ export function useWebSocketMessages(roomId: string | undefined) {
         // Determine current player's position based on their user ID in the seats
         const { userId } = useUserStore.getState()
         if (userId && data.room.seats) {
-          console.log('Start room - determining player position for userId:', userId)
-          console.log('Start room - room seats:', data.room.seats)
-          console.log('Start room - room data structure:', data.room)
           
           // Find which seat this user is assigned to
           const seatMapping: Record<string, Position> = { N: 'North', S: 'South', E: 'East', W: 'West' }
           let playerPosition: Position | null = null
           
           for (const [seatKey, playerId] of Object.entries(data.room.seats)) {
-            console.log(`Start room - checking seat ${seatKey}: ${playerId} vs userId: ${userId}`)
             if (playerId === userId) {
               playerPosition = seatMapping[seatKey] || 'North'
-              console.log('Start room - found player position:', playerPosition)
               break
             }
           }
@@ -468,22 +625,12 @@ export function useWebSocketMessages(roomId: string | undefined) {
         }
       }
       
-      // Update game state if provided (check both gameState and gameData)
-      if (data.gameState) {
-        console.log('Start room - setting gameState:', data.gameState)
-        console.log('Start room - gameState.currentTrick:', data.gameState.currentTrick)
-        console.log('Start room - gameState.tricks:', data.gameState.tricks)
-        useGameStore.getState().updateGameState(data.gameState)
-        setAiThinking(false)
-      } else if (data.gameData) {
-        console.log('Start room - processing gameData:', data.gameData)
-        console.log('Start room - gameData.currentTrick before fix:', data.gameData.currentTrick)
-        console.log('Start room - gameData.tricks before fix:', data.gameData.tricks)
+      // Update game state if provided
+      if (data.gameData) {
         
         // Ensure currentTrick is properly initialized
         const gameData = data.gameData
         if (!gameData.currentTrick) {
-          console.log('Start room - initializing currentTrick')
           gameData.currentTrick = {
             cards: { North: null, East: null, South: null, West: null },
             winner: null,
@@ -493,14 +640,10 @@ export function useWebSocketMessages(roomId: string | undefined) {
         }
         // Ensure tricks array is properly initialized
         if (!gameData.tricks) {
-          console.log('Start room - initializing tricks array')
           gameData.tricks = []
         }
         
         // Ensure hands are properly formatted for frontend
-        console.log('Start room - gameData.hands before fix:', gameData.hands)
-        console.log('Start room - gameData.hands type:', typeof gameData.hands)
-        console.log('Start room - gameData.hands keys:', gameData.hands ? Object.keys(gameData.hands) : 'undefined')
         if (gameData.hands) {
           // Convert hands to the expected format if needed
           const hands = gameData.hands
@@ -512,7 +655,6 @@ export function useWebSocketMessages(roomId: string | undefined) {
             Object.entries(hands).forEach(([key, cards]) => {
               const frontendPosition = positionMap[key as keyof typeof positionMap]
               if (frontendPosition && Array.isArray(cards)) {
-                console.log(`Start room - converting ${key} to ${frontendPosition}:`, cards)
                 // Convert string format to object format
                 convertedHands[frontendPosition] = cards.map(cardString => {
                   // Handle "10" cards correctly
@@ -553,12 +695,10 @@ export function useWebSocketMessages(roomId: string | undefined) {
             'completed': 'completed'
           }
           gameData.phase = phaseMap[gameData.currentPhase] || 'bidding'
-          console.log('Start room - converted phase to:', gameData.phase)
         }
         
         // Convert turn to currentPlayer
         if (gameData.turn) {
-          console.log('Start room - converting turn from:', gameData.turn)
           // Convert user ID to position by checking which position this user is assigned to
           const { currentRoom } = useRoomDataStore.getState()
           if (currentRoom) {
@@ -567,7 +707,6 @@ export function useWebSocketMessages(roomId: string | undefined) {
             for (const [seatKey, playerId] of Object.entries(currentRoom.seats)) {
               if (playerId && gameData.turn.includes(playerId)) {
                 gameData.currentPlayer = seatMapping[seatKey] || 'North'
-                console.log('Start room - converted currentPlayer to:', gameData.currentPlayer)
                 break
               }
             }
@@ -579,15 +718,23 @@ export function useWebSocketMessages(roomId: string | undefined) {
           }
         }
         
-        console.log('Start room - gameData after fixes:', gameData)
-        console.log('Start room - gameData.currentTrick after fix:', gameData.currentTrick)
-        console.log('Start room - gameData.tricks after fix:', gameData.tricks)
-        console.log('Start room - gameData.hands after fix:', gameData.hands)
+        // Convert ServerGameData to GameData format
+        const convertedGameData = {
+          ...gameData,
+          // Add missing GameData properties with defaults
+          dealer: "North" as Position,
+          previousTrick: null,
+          contract: null,
+          dummy: null,
+          firstCardPlayed: false,
+          gameNumber: 1,
+          vulnerability: { NS: false, EW: false }
+        } as any // Type assertion since we know the structure will be correct
         
         console.log('Start room - about to set game state in store')
-        useGameStore.getState().updateGameState(gameData as any)
+        useGameStore.getState().updateGameData(convertedGameData)
         console.log('Start room - game state set in store')
-        console.log('Start room - current store state:', useGameStore.getState().gameState)
+        console.log('Start room - current store state:', useGameStore.getState().gameData)
         setAiThinking(false)
       }
       

@@ -24,7 +24,7 @@ export interface Trick {
   trickLeader: Position | null
 }
 
-export interface GameState {
+export interface GameData {
   phase: GamePhase
   currentPlayer: Position
   dealer: Position

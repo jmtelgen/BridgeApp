@@ -3,7 +3,7 @@ import { useGameStore } from '../stores/gameStore'
 import { useRoomDataStore } from '../stores/roomDataStore'
 
 export const useAITurn = () => {
-  const { gameState, aiThinking, handleAITurn } = useGameStore()
+  const { gameData: gameState, aiThinking, handleAITurn } = useGameStore()
   const { getPlayerName, isRobot } = useRoomDataStore()
 
   useEffect(() => {

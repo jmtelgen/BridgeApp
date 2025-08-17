@@ -16,7 +16,7 @@ import { subtractPositions } from "../../utils/positionUtils"
 export default function BridgeGame() {
   const navigate = useNavigate()
   const {
-    gameState,
+    gameData,
     selectedCard,
     setSelectedCard,
     aiThinking,
@@ -24,7 +24,7 @@ export default function BridgeGame() {
     makeBid,
     playCard
   } = useGameStore()
-  const { getNorthPlayerName, getWestPlayerName, getEastPlayerName, getPlayerName, getCurrentPlayerPosition, isRobot, getDisplayPositionLabel } = useRoomDataStore()
+  const { getNorthPlayerName, getWestPlayerName, getEastPlayerName, getPlayerName, getPlayerDisplayName, getCurrentPlayerPosition, isRobot, getDisplayPositionLabel } = useRoomDataStore()
 
   // Handle AI turns automatically
   useAITurn()
@@ -34,7 +34,7 @@ export default function BridgeGame() {
   }
 
   const handleCardClick = (card: PlayingCard) => {
-    if (gameState.phase === "playing") {
+    if (gameData.phase === "playing") {
       playCard(card)
     } else {
       setSelectedCard(selectedCard?.suit === card.suit && selectedCard?.rank === card.rank ? null : card)
@@ -59,13 +59,13 @@ export default function BridgeGame() {
     
     // Check if cards should be shown
     const showCards = isCurrentPlayer || 
-      (gameState.phase === "playing" && gameState.dummy === gamePosition && gameState.firstCardPlayed)
+      (gameData.phase === "playing" && gameData.dummy === gamePosition && gameData.firstCardPlayed)
     
     // Check if this is a dummy hand
-    const isDummy = gameState.phase === "playing" && gameState.dummy === gamePosition
+    const isDummy = gameData.phase === "playing" && gameData.dummy === gamePosition
     
     // Check if current player should control this hand
-    const shouldCurrentPlayerControl = isCurrentPlayer && gameState.currentPlayer === currentPlayerPosition
+    const shouldCurrentPlayerControl = isCurrentPlayer && gameData.currentPlayer === currentPlayerPosition
     
     // For East/West dummy hands, use column display
     const displayAsDummy = isDummy && (displayPosition === "East" || displayPosition === "West")
@@ -73,13 +73,13 @@ export default function BridgeGame() {
     return (
       <PlayerHand
         position={displayPosition}
-        cards={gameState.hands[gamePosition] || []}
+        cards={gameData.hands[gamePosition] || []}
         isCurrentPlayer={isCurrentPlayer}
         isPlayerTurn={shouldCurrentPlayerControl}
         showCards={showCards}
         isDummy={isDummy}
         selectedCard={selectedCard}
-        currentTrickCard={gameState.currentTrick?.cards?.[gamePosition] || null}
+        currentTrickCard={gameData.currentTrick?.cards?.[gamePosition] || null}
         onCardClick={shouldCurrentPlayerControl ? handleCardClick : undefined}
         displayAsDummy={displayAsDummy}
       />
@@ -102,11 +102,11 @@ export default function BridgeGame() {
               New Game
             </Button>
             <Badge variant="secondary">
-              {currentPlayerPosition} to {gameState.phase === "bidding" ? "bid" : "play"}
+              {currentPlayerPosition} to {gameData.phase === "bidding" ? "bid" : "play"}
             </Badge>
-            {gameState.phase === "bidding" && (
+            {gameData.phase === "bidding" && (
               <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                Dealer: {gameState.dealer}
+                Dealer: {gameData.dealer}
               </Badge>
             )}
           </div>
@@ -124,10 +124,10 @@ export default function BridgeGame() {
                   <Badge variant="outline">
                     {westDisplayLabel}
                   </Badge>
-                  {gameState.dealer === westDisplayLabel && gameState.phase === "bidding" && (
+                  {gameData.dealer === westDisplayLabel && gameData.phase === "bidding" && (
                     <Badge variant="secondary" className="bg-blue-100 text-blue-800">Dealer</Badge>
                   )}
-                  {gameState.dummy === westDisplayLabel && <Badge variant="secondary">Dummy</Badge>}
+                  {gameData.dummy === westDisplayLabel && <Badge variant="secondary">Dummy</Badge>}
                   {getWestPlayerName() && isRobot(String(getWestPlayerName())) && (
                     <Badge variant="outline" className="bg-blue-50 text-blue-700">AI</Badge>
                   )}
@@ -154,10 +154,10 @@ export default function BridgeGame() {
                   <Badge variant="outline">
                     {northDisplayLabel}
                   </Badge>
-                  {gameState.dealer === northDisplayLabel && gameState.phase === "bidding" && (
+                  {gameData.dealer === northDisplayLabel && gameData.phase === "bidding" && (
                     <Badge variant="secondary" className="bg-blue-100 text-blue-800">Dealer</Badge>
                   )}
-                  {gameState.dummy === northDisplayLabel && <Badge variant="secondary">Dummy</Badge>}
+                  {gameData.dummy === northDisplayLabel && <Badge variant="secondary">Dummy</Badge>}
                   {getNorthPlayerName() && isRobot(String(getNorthPlayerName())) && (
                     <Badge variant="outline" className="bg-blue-50 text-blue-700">AI</Badge>
                   )}
@@ -169,16 +169,27 @@ export default function BridgeGame() {
             </div>
 
             {/* Center Playing/Bidding Area */}
-            <div className="flex-1 flex items-center justify-center">
-              {gameState.phase === "bidding" && (
+            <div className="flex-1 flex flex-col items-center justify-center">
+              {/* Turn indicator for playing phase */}
+              {gameData.phase === "playing" && (
+                <div className="mb-4 text-center">
+                  <div className="inline-block bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg border-2 border-green-500">
+                    <span className="font-semibold text-lg">🎯 It's </span>
+                    <span className="font-bold text-2xl text-yellow-300">{gameData.currentPlayer}'s</span>
+                    <span className="font-semibold text-lg"> turn to play!</span>
+                  </div>
+                </div>
+              )}
+              
+              {gameData.phase === "bidding" && (
                 <BiddingArea onMakeBid={makeBid} />
               )}
-              {gameState.phase === "playing" && (
-                <PlayingArea gameState={gameState} />
+              {gameData.phase === "playing" && (
+                <PlayingArea gameState={gameData} />
               )}
-              {gameState.phase === "completed" && (
+              {gameData.phase === "completed" && (
                 <GameCompleted
-                  gameState={gameState}
+                  gameState={gameData}
                   onNewGame={startNewGame}
                   onBackToRoom={handleBackToRoom}
                 />
@@ -189,16 +200,16 @@ export default function BridgeGame() {
             <div className="mt-4">
               <div className="text-center mb-2 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-sm">
                 <div className="text-sm font-medium text-gray-700 mb-1">
-                  {`${getPlayerName(currentPlayerPosition)} (You)`}
+                  {getPlayerDisplayName(currentPlayerPosition)}
                 </div>
                 <div className="flex justify-center gap-1 flex-wrap">
                   <Badge variant={"default"}>
                     {southDisplayLabel}
                   </Badge>
-                  {gameState.dealer === currentPlayerPosition && gameState.phase === "bidding" && (
+                  {gameData.dealer === currentPlayerPosition && gameData.phase === "bidding" && (
                     <Badge variant="secondary" className="bg-blue-100 text-blue-800">Dealer</Badge>
                   )}
-                  {gameState.dummy === currentPlayerPosition && <Badge variant="secondary">Dummy</Badge>}
+                  {gameData.dummy === currentPlayerPosition && <Badge variant="secondary">Dummy</Badge>}
                 </div>
               </div>
               <div className="flex justify-center">
@@ -224,10 +235,10 @@ export default function BridgeGame() {
                   <Badge variant={"outline"}>
                     {eastDisplayLabel}
                   </Badge>
-                  {gameState.dealer === eastDisplayLabel && gameState.phase === "bidding" && (
+                  {gameData.dealer === eastDisplayLabel && gameData.phase === "bidding" && (
                     <Badge variant="secondary" className="bg-blue-100 text-blue-800">Dealer</Badge>
                   )}
-                  {gameState.dummy === eastDisplayLabel && <Badge variant="secondary">Dummy</Badge>}
+                  {gameData.dummy === eastDisplayLabel && <Badge variant="secondary">Dummy</Badge>}
                 </div>
             </div>
           </div>
@@ -236,10 +247,10 @@ export default function BridgeGame() {
         {/* Game Info */}
         <div className="mt-6 text-center text-sm text-gray-600">
           <p>
-            {gameState.phase}
-            {gameState.phase === "bidding"
+            {gameData.phase}
+            {gameData.phase === "bidding"
               ? "Players are bidding. Make your bid when it's your turn."
-              : gameState.phase === "playing"
+              : gameData.phase === "playing"
                 ? "Playing phase. Click a card from your hand to play it."
                 : "Game completed!"}
           </p>

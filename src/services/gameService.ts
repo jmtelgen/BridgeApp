@@ -1,5 +1,5 @@
 import { api } from './api'
-import { GameState } from '../components/bridge/types'
+import { GameData } from '../components/bridge/types'
 import { gameWebSocketService, websocketService } from './websocketService'
 import { useUserStore } from '../stores/userStore'
 
@@ -11,7 +11,7 @@ interface GameAction {
 }
 
 interface GameUpdate {
-  gameState: GameState
+  gameState: GameData
   timestamp: number
 }
 
