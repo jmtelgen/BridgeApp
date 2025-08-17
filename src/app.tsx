@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { RoomManager } from './components/bridge/components/Room';
 import { RoomGame } from './components/bridge/components/RoomGame';
+import CreateAccountPage from './components/bridge/components/auth/createAccount';
+import LoginPage from './components/bridge/components/auth/login';
 import { useRoomDataStore } from './stores/roomDataStore';
 import { useUserStore } from './stores/userStore';
 import { Toaster } from './components/ui/toaster';
@@ -118,6 +120,8 @@ export function App() {
       <Routes>
         <Route path="/" element={<RoomPage />} />
         <Route path="/room/:roomId" element={<RoomGameWrapper />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/create-account" element={<CreateAccountPage />} />
       </Routes>
       <Toaster />
     </>

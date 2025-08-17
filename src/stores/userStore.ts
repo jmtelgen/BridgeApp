@@ -1,14 +1,35 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+interface User {
+  userId: string
+  username: string
+  email: string
+  createdAt: string
+}
+
 interface UserStore {
   userId: string | null
   playerName: string | null
   position: "N" | "S" | "E" | "W" | null
+  
+  // Authentication state
+  isAuthenticated: boolean
+  accessToken: string | null
+  user: User | null
+  
+  // Methods
   generateUserId: () => string
   setPlayerName: (name: string) => void
   setPosition: (position: "N" | "S" | "E" | "W") => void
   clearUser: () => void
+  
+  // Authentication methods
+  setAuthData: (accessToken: string, user: User) => void
+  clearAuthData: () => void
+  getAccessToken: () => string | null
+  updateAccessToken: (newToken: string) => void
+  logout: () => Promise<void>
 }
 
 // Generate a random user ID
@@ -25,6 +46,11 @@ export const useUserStore = create<UserStore>()(
       userId: null,
       playerName: null,
       position: null,
+
+      // Authentication state
+      isAuthenticated: false,
+      accessToken: null,
+      user: null,
 
       generateUserId: () => {
         const currentUserId = get().userId
@@ -48,6 +74,26 @@ export const useUserStore = create<UserStore>()(
 
       clearUser: () => {
         set({ userId: null, playerName: null, position: null })
+      },
+      
+      // Authentication methods
+      setAuthData: (accessToken: string, user: User) => {
+        set({ isAuthenticated: true, accessToken, user })
+      },
+      clearAuthData: () => {
+        set({ isAuthenticated: false, accessToken: null, user: null })
+      },
+      getAccessToken: () => {
+        return get().accessToken
+      },
+      updateAccessToken: (newToken: string) => {
+        set({ accessToken: newToken })
+      },
+      logout: async () => {
+        // In a real application, you would call an auth service to log out
+        // For now, we'll just clear the data locally
+        set({ isAuthenticated: false, accessToken: null, user: null })
+        console.log('User logged out.')
       }
     }),
     {
@@ -55,6 +101,8 @@ export const useUserStore = create<UserStore>()(
       partialize: (state) => ({ 
         userId: state.userId,
         playerName: state.playerName,
+        // Note: accessToken and user are NOT persisted to localStorage for security
+        // They are only stored in memory and will be cleared on page refresh
       })
     }
   )
