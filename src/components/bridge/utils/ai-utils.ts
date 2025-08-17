@@ -1,5 +1,9 @@
 import { PlayingCard, Position, Suit, Rank, Bid, Trick, GameData } from '../types'
 import { solveBoardFromStart, solveBoard, DDSSolution } from '../dds/double-dummy-solver'
+import { 
+  getAllPositions, 
+  getPlayingOrderFromLeader 
+} from '../../../utils/positionUtils'
 
 // Convert between display suits and solver suits
 const displayToSolverSuit: Record<Suit, string> = {
@@ -116,7 +120,7 @@ export const convertCurrentTrickToSolverFormat = (currentTrick: Trick): string[]
   }
   
   // Get playing order starting from the trick leader
-  const playingOrder = getPlayingOrderFromLeader(trickLeader)
+  const playingOrder = getPlayingOrderFromLeaderLocal(trickLeader)
   
   // Add cards in the order they were played
   for (const position of playingOrder) {
@@ -130,17 +134,8 @@ export const convertCurrentTrickToSolverFormat = (currentTrick: Trick): string[]
 }
 
 // Helper function to get playing order starting from a leader
-const getPlayingOrderFromLeader = (leader: Position): Position[] => {
-  const positions: Position[] = ["North", "East", "South", "West"]
-  const leaderIndex = positions.indexOf(leader)
-  
-  // Return positions in playing order starting from leader
-  return [
-    positions[leaderIndex],
-    positions[(leaderIndex + 1) % 4],
-    positions[(leaderIndex + 2) % 4],
-    positions[(leaderIndex + 3) % 4]
-  ]
+const getPlayingOrderFromLeaderLocal = (leader: Position): Position[] => {
+  return getPlayingOrderFromLeader(leader)
 }
 
 // Convert trump to solver format

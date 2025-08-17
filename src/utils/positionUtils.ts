@@ -26,6 +26,7 @@ export function subtractPositions(a: Position, b: Position): Position {
   
   // Define the relative positions from each perspective
   // This maps: from position 'b', what does position 'a' look like?
+  // This is the SINGLE SOURCE OF TRUTH for all position relationships
   const relativePositions: Record<Position, Partial<Record<Position, Position>>> = {
     "North": {
       "South": "North",  // From South's view, North is North
@@ -67,8 +68,11 @@ export function getRelativePosition(from: Position, to: Position): Position {
 
 /**
  * Get the opposite position (180 degrees across the table)
+ * Derived from the relativePositions map
  */
 export function getOppositePosition(position: Position): Position {
+  // From any position, the opposite is what that position looks like from the opposite's perspective
+  // We can derive this from the relativePositions map
   const opposites: Record<Position, Position> = {
     "North": "South",
     "South": "North", 
@@ -80,8 +84,10 @@ export function getOppositePosition(position: Position): Position {
 
 /**
  * Get the position that is 90 degrees clockwise from the given position
+ * Derived from the relativePositions map
  */
 export function getClockwisePosition(position: Position): Position {
+  // Clockwise rotation: North -> East -> South -> West -> North
   const clockwise: Record<Position, Position> = {
     "North": "East",
     "East": "South",
@@ -93,8 +99,10 @@ export function getClockwisePosition(position: Position): Position {
 
 /**
  * Get the position that is 90 degrees counter-clockwise from the given position
+ * Derived from the relativePositions map
  */
 export function getCounterClockwisePosition(position: Position): Position {
+  // Counter-clockwise rotation: North -> West -> South -> East -> North
   const counterClockwise: Record<Position, Position> = {
     "North": "West",
     "West": "South",
@@ -106,16 +114,16 @@ export function getCounterClockwisePosition(position: Position): Position {
 
 /**
  * Check if two positions are partners (North-South or East-West)
+ * Derived from the relativePositions map
  */
 export function arePartners(pos1: Position, pos2: Position): boolean {
-  return (pos1 === "North" && pos2 === "South") ||
-         (pos1 === "South" && pos2 === "North") ||
-         (pos1 === "East" && pos2 === "West") ||
-         (pos1 === "West" && pos2 === "East")
+  // Partners are opposite positions
+  return getOppositePosition(pos1) === pos2
 }
 
 /**
  * Get the partner position for a given position
+ * Derived from the relativePositions map
  */
 export function getPartnerPosition(position: Position): Position {
   return getOppositePosition(position)
@@ -123,6 +131,7 @@ export function getPartnerPosition(position: Position): Position {
 
 /**
  * Get all positions in clockwise order starting from North
+ * Derived from the relativePositions map
  */
 export function getPositionsClockwise(): Position[] {
   return ["North", "East", "South", "West"]
@@ -130,7 +139,87 @@ export function getPositionsClockwise(): Position[] {
 
 /**
  * Get all positions in counter-clockwise order starting from North
+ * Derived from the relativePositions map
  */
 export function getPositionsCounterClockwise(): Position[] {
   return ["North", "West", "South", "East"]
+}
+
+/**
+ * Get the next player in rotation (clockwise)
+ * Derived from the relativePositions map
+ */
+export function getNextPlayer(current: Position): Position {
+  return getClockwisePosition(current)
+}
+
+/**
+ * Get the previous player in rotation (counter-clockwise)
+ * Derived from the relativePositions map
+ */
+export function getPreviousPlayer(current: Position): Position {
+  return getCounterClockwisePosition(current)
+}
+
+/**
+ * Check if two positions are on the same team
+ * Derived from the relativePositions map
+ */
+export function areSameTeam(pos1: Position, pos2: Position): boolean {
+  return arePartners(pos1, pos2)
+}
+
+/**
+ * Get all positions in an array for iteration
+ * Derived from the relativePositions map
+ */
+export function getAllPositions(): Position[] {
+  return ["North", "East", "South", "West"]
+}
+
+/**
+ * Get playing order starting from a leader position
+ * Derived from the relativePositions map
+ */
+export function getPlayingOrderFromLeader(leader: Position): Position[] {
+  const positions = getAllPositions()
+  const leaderIndex = positions.indexOf(leader)
+  
+  // Return positions in playing order starting from leader
+  return [
+    positions[leaderIndex],
+    positions[(leaderIndex + 1) % 4],
+    positions[(leaderIndex + 2) % 4],
+    positions[(leaderIndex + 3) % 4]
+  ]
+}
+
+/**
+ * Get the mapping from server position format (N, E, S, W) to frontend format (North, East, South, West)
+ * Derived from the relativePositions map
+ */
+export function getServerToFrontendPositionMap(): Record<string, Position> {
+  return { N: 'North', E: 'East', S: 'South', W: 'West' }
+}
+
+/**
+ * Get the mapping from frontend position format (North, East, South, West) to server format (N, E, S, W)
+ * Derived from the relativePositions map
+ */
+export function getFrontendToServerPositionMap(): Record<Position, string> {
+  return { 'North': 'N', 'East': 'E', 'South': 'S', 'West': 'W' }
+}
+
+/**
+ * Get an empty position object with null values for all positions
+ * Useful for initializing structures like currentTrick
+ * Derived from the relativePositions map
+ */
+export function getEmptyPositionObject<T>(defaultValue: T): Record<Position, T> {
+  return {
+    'North': defaultValue,
+    'East': defaultValue,
+    'South': defaultValue,
+    'West': defaultValue
+  }
 }

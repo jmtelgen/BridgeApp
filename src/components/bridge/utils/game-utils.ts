@@ -1,4 +1,10 @@
 import { PlayingCard, Position, Suit, Rank, Bid, Trick } from '../types'
+import { 
+  getNextPlayer, 
+  areSameTeam, 
+  getOppositePosition, 
+  getAllPositions 
+} from '../../../utils/positionUtils'
 
 // Card values for sorting and comparison
 export const cardValues: Record<Rank, number> = {
@@ -39,7 +45,7 @@ export const dealCards = (deck: PlayingCard[]): Record<Position, PlayingCard[]> 
     West: []
   }
   
-  const positions: Position[] = ["North", "East", "South", "West"]
+  const positions = getAllPositions()
   
   for (let i = 0; i < deck.length; i++) {
     const position = positions[i % 4]
@@ -71,32 +77,6 @@ export const sortHandForDummy = (hand: PlayingCard[]): PlayingCard[] => {
     }
     return a.value - b.value // Lower cards first (dummy convention)
   })
-}
-
-// Get next player in rotation
-export const getNextPlayer = (current: Position): Position => {
-  const players: Position[] = ["North", "East", "South", "West"]
-  const currentIndex = players.indexOf(current)
-  return players[(currentIndex + 1) % 4]
-}
-
-// Helper function to determine if two positions are on the same team
-export const areSameTeam = (pos1: Position, pos2: Position): boolean => {
-  const nsTeam = ["North", "South"]
-  const ewTeam = ["East", "West"]
-  return (nsTeam.includes(pos1) && nsTeam.includes(pos2)) || 
-         (ewTeam.includes(pos1) && ewTeam.includes(pos2))
-}
-
-// Helper function to get the opposite position (across the table)
-export const getOppositePosition = (position: Position): Position => {
-  const opposites: Record<Position, Position> = {
-    "North": "South",
-    "South": "North", 
-    "East": "West",
-    "West": "East"
-  }
-  return opposites[position]
 }
 
 // Check if a bid is valid

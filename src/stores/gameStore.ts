@@ -13,14 +13,43 @@ import { getNextAIBid } from '../components/bridge/dds/ai-bidding-integration'
 import { gameWebSocketService } from '../services/websocketService'
 import { useRoomDataStore } from './roomDataStore'
 import { useUserStore } from './userStore'
+import { getAllPositions } from '../utils/positionUtils'
+
+// Utility function to convert card to server format
+const cardToServerFormat = (card: PlayingCard): { suit: string, rank: string } => {
+  // Convert display suit to server suit
+  const suitMap: Record<Suit, string> = {
+    "♠": "S",
+    "♥": "H", 
+    "♦": "D",
+    "♣": "C"
+  }
+  
+  // Convert display rank to server rank (10 -> T)
+  const rankMap: Record<string, string> = {
+    "A": "A", "K": "K", "Q": "Q", "J": "J", 
+    "10": "T", "9": "9", "8": "8", "7": "7", 
+    "6": "6", "5": "5", "4": "4", "3": "3", "2": "2"
+  }
+  
+  return {
+    suit: suitMap[card.suit],
+    rank: rankMap[card.rank]
+  }
+}
 
 // Initialize new game
 const initializeGame = (): GameData => {
-  const deck = shuffleDeck(createDeck())
-  const hands = dealCards(deck)
+  // Initialize empty hands for all positions
+  const hands: Record<Position, PlayingCard[]> = {
+    North: [],
+    East: [],
+    South: [],
+    West: []
+  }
   
-  // Sort all hands
-  for (const position of ["North", "East", "South", "West"] as Position[]) {
+  // Sort hands for better display
+  for (const position of getAllPositions()) {
     hands[position] = sortHand(hands[position])
   }
   
@@ -160,11 +189,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
         return
       }
 
+      // Convert card to server format before sending
+      const serverCard = cardToServerFormat(card)
+      console.log('Playing card - display format:', card.suit + card.rank, 'server format:', serverCard.suit + serverCard.rank)
+      
       // Send card play via WebSocket
-      await gameWebSocketService.playCard(currentRoom.roomId, userId, {
-        suit: card.suit,
-        rank: card.rank
-      })
+      await gameWebSocketService.playCard(currentRoom.roomId, userId, serverCard)
 
       // Clear selected card
       set({ selectedCard: null })
