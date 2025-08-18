@@ -56,9 +56,7 @@ export default function BridgeGame() {
     
     // Get the actual game position for this display position using subtractPositions
     const gamePosition: Position = subtractPositions(currentPlayerPosition, displayPosition)
-    console.log('gamePosition', gamePosition, displayPosition, currentPlayerPosition)
-    console.log('gameData.hands', gameData.hands)
-    console.log('hand pos', gameData.hands[gamePosition])
+    
     
     // Check if cards should be shown
     const showCards = isCurrentPlayer || 

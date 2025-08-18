@@ -11,7 +11,6 @@ export function useRoomUpdates(roomId: string | undefined) {
 
     // Handler for room updates
     const handleRoomUpdate = (data: any) => {
-      console.log('Received room update:', data)
       if (data.room) {
         updateCurrentRoom(data.room)
       }
@@ -19,7 +18,6 @@ export function useRoomUpdates(roomId: string | undefined) {
 
     // Handler for player joined
     const handlePlayerJoined = (data: any) => {
-      console.log('Player joined:', data)
       if (data.room) {
         updateCurrentRoom(data.room)
       }
@@ -27,7 +25,6 @@ export function useRoomUpdates(roomId: string | undefined) {
 
     // Handler for player left
     const handlePlayerLeft = (data: any) => {
-      console.log('Player left:', data)
       if (data.room) {
         updateCurrentRoom(data.room)
       }

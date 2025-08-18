@@ -10,10 +10,9 @@ export function RoomGame() {
   const { currentRoom, clearCurrentRoom } = useRoomDataStore()
   const [gameStarted, setGameStarted] = useState(false)
 
-  // Debug logging for room data
+  // Monitor room data changes
   useEffect(() => {
-    console.log('RoomGame - currentRoom changed:', currentRoom)
-    console.log('RoomGame - currentRoom?.roomId:', currentRoom?.roomId)
+    // Room data monitoring
   }, [currentRoom])
 
   // Set up real-time WebSocket message handling for both room and game updates
@@ -29,7 +28,6 @@ export function RoomGame() {
       try {
         // You could add a roomService.getRoom(roomId) method here
         // For now, we'll rely on WebSocket updates
-        console.log('Periodic room refresh check')
       } catch (error) {
         console.error('Failed to refresh room data:', error)
       }

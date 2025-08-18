@@ -53,19 +53,8 @@ export default function LoginPage() {
       // Make API call to login endpoint
       const response = await userAuthService.login(loginData)
       
-      console.log('Login response received:', response)
-      console.log('Response type:', typeof response)
-      console.log('Response keys:', Object.keys(response))
-      if (response.user) {
-        console.log('User object keys:', Object.keys(response.user))
-      } else {
-        console.log('No user object found in response')
-      }
-      
       // Store access token and user data in the user store (in-memory only)
       setAuthData(response.accessToken, response.user)
-      
-      console.log('Login successful, user authenticated:', response.user.username)
       
       // Navigate to home page after successful login
       navigate("/")

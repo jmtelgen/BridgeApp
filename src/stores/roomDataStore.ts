@@ -124,10 +124,9 @@ export const useRoomDataStore = create<RoomDataStore>()(
            playerName.toLowerCase().includes('bot')
       },
 
-      getCurrentPlayerPosition: () => {
-        console.log('getCurrentPlayerPosition', get().currentPlayerPosition)
-        return get().currentPlayerPosition
-      },
+        getCurrentPlayerPosition: () => {
+    return get().currentPlayerPosition
+  },
 
       getDisplayPositionLabel: (displayPosition: Position) => {
         const currentPos = get().currentPlayerPosition

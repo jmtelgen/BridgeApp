@@ -27,7 +27,7 @@ export const PlayerHand = ({
   onCardClick,
   displayAsDummy = false
 }: PlayerHandProps) => {
-  console.log('PlayerHand - position:', position, 'cards:', cards, 'cards?.length:', cards?.length)
+
   // Don't show cards if they shouldn't be visible
   if (!showCards && cards && cards.length > 0) {
     return (

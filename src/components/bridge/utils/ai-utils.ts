@@ -153,8 +153,6 @@ const cardValues: Record<Rank, number> = {
 /*
 export const aiBid = async (gameState: GameData): Promise<Bid> => {
   // For now, just pass to avoid WASM loading issues
-  console.log('AI bidding: Pass (double dummy solver disabled)');
-  
   return {
     level: "Pass",
     player: gameState.currentPlayer,
@@ -166,8 +164,7 @@ export const aiBid = async (gameState: GameData): Promise<Bid> => {
     // Convert hands to solver format
     const solverHands = convertHandsToSolverFormat(gameState.hands)
     
-    // Debug: Log the converted hands
-    console.log('Converted hands for AI bidding:', solverHands)
+    // Convert hands to solver format
     
     // Try different contracts to see which one scores best
     const contracts = [
@@ -199,8 +196,6 @@ export const aiBid = async (gameState: GameData): Promise<Bid> => {
         const first = positionToDirection[gameState.currentPlayer]
         const dealer = positionToDirection[gameState.dealer]
         
-        console.log(`Trying contract ${contract.level}${contract.suit} with trump=${trump}, first=${first}, dealer=${dealer}`)
-        
         const solutions = await solveBoardFromStart({
           trump,
           first,
@@ -212,21 +207,17 @@ export const aiBid = async (gameState: GameData): Promise<Bid> => {
         // Calculate expected tricks for this contract
         const expectedTricks = solutions.reduce((sum: number, solution: DDSSolution) => sum + solution.score, 0) / solutions.length
         
-        console.log(`Contract ${contract.level}${contract.suit} expected tricks: ${expectedTricks}`)
-        
         if (expectedTricks > bestScore) {
           bestScore = expectedTricks
           bestContract = contract
         }
       } catch (error) {
-        console.log(`Failed to solve for contract ${contract.level}${contract.suit}:`, error)
         continue
       }
     }
     
     // If we found a good contract, bid it
     if (bestContract && bestScore >= bestContract.level + 6) {
-      console.log(`AI bidding ${bestContract.level}${bestContract.suit} with expected tricks: ${bestScore}`)
       return {
         level: bestContract.level,
         suit: bestContract.suit,
@@ -236,7 +227,6 @@ export const aiBid = async (gameState: GameData): Promise<Bid> => {
     }
     
     // Otherwise pass
-    console.log('AI passing - no good contract found')
     return {
       level: "Pass",
       player: gameState.currentPlayer,
@@ -258,18 +248,11 @@ export const aiBid = async (gameState: GameData): Promise<Bid> => {
 // AI playing using double dummy solver
 export const aiPlay = async (gameState: GameData): Promise<PlayingCard> => {
   try {
-    console.log('AI playing - gameState:', gameState);
-    console.log('AI playing - currentPlayer:', gameState.currentPlayer);
-    console.log('AI playing - currentTrick:', gameState.currentTrick);
-    
     // Convert hands to solver format
     const solverHands = convertHandsToSolverFormat(gameState.hands)
     
     // Convert current trick to solver format
     const currentTrick = gameState.currentTrick ? convertCurrentTrickToSolverFormat(gameState.currentTrick) : []
-    
-    console.log('AI playing - converted hands:', solverHands)
-    console.log('AI playing - current trick:', currentTrick)
     
     // Get valid cards for current player
     const hand = gameState.hands[gameState.currentPlayer]
@@ -277,16 +260,12 @@ export const aiPlay = async (gameState: GameData): Promise<PlayingCard> => {
       canPlayCard(card, hand, gameState.currentTrick?.ledSuit || null)
     )
     
-    console.log('AI playing - hand:', hand.map(c => `${c.suit}${c.rank}`))
-    console.log('AI playing - valid cards:', validCards.map(c => `${c.suit}${c.rank}`))
-    
     if (validCards.length === 0) {
       throw new Error("No valid cards to play")
     }
     
     // If this is the first card of the trick, use double dummy solver
     if (currentTrick?.length === 0) {
-      console.log('AI playing - leading trick')
       const solutions = await solveBoardFromStart({
         trump: convertTrumpToSolverFormat(gameState.contract!.suit),
         first: positionToDirection[gameState.currentPlayer],
@@ -294,8 +273,6 @@ export const aiPlay = async (gameState: GameData): Promise<PlayingCard> => {
         robot: true,
         hands: solverHands
       })
-      
-      console.log('AI playing - lead solutions:', solutions)
       
       // Find the best card to lead
       let bestCard = validCards[0]
@@ -310,10 +287,8 @@ export const aiPlay = async (gameState: GameData): Promise<PlayingCard> => {
         }
       }
       
-      console.log(`AI playing optimal lead: ${bestCard.suit}${bestCard.rank} (score: ${bestScore})`)
       return bestCard
     } else {
-      console.log('AI playing - following trick')
       // For subsequent cards, use the solver with current trick
       // The 'first' parameter should be the trick leader, not the current player
       const trickLeader = gameState.currentTrick?.trickLeader || gameState.currentPlayer
@@ -325,8 +300,6 @@ export const aiPlay = async (gameState: GameData): Promise<PlayingCard> => {
         robot: false,
         hands: solverHands
       })
-      
-      console.log('AI playing - follow solutions:', solutions)
       
       // Find the best card to play from valid cards
       let bestCard = validCards[0]
@@ -341,7 +314,6 @@ export const aiPlay = async (gameState: GameData): Promise<PlayingCard> => {
         }
       }
       
-      console.log(`AI playing optimal card: ${bestCard.suit}${bestCard.rank} (score: ${bestScore})`)
       return bestCard
     }
     
@@ -352,7 +324,6 @@ export const aiPlay = async (gameState: GameData): Promise<PlayingCard> => {
     const validCards = hand.filter(card => 
       canPlayCard(card, hand, gameState.currentTrick?.ledSuit || null)
     )
-    console.log('AI playing fallback: First valid card')
     return validCards[0]
   }
 }

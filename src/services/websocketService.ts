@@ -225,7 +225,6 @@ class WebSocketService {
    * Cleanup all subscriptions and handlers
    */
   cleanupAll(): void {
-    console.log('Cleaning up all WebSocket handlers')
     this.messageHandlers.clear()
   }
 }

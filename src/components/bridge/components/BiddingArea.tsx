@@ -49,11 +49,7 @@ export const BiddingArea = ({ onMakeBid }: BiddingAreaProps) => {
   const isCurrentUserTurn = currentPlayerPosition === gameData.currentPlayer
   
   // Debug logging
-  console.log('BiddingArea - gameData.currentPlayer:', gameData.currentPlayer)
-  console.log('BiddingArea - currentPlayerPosition:', currentPlayerPosition)
-  console.log('BiddingArea - isCurrentUserTurn:', isCurrentUserTurn)
-  console.log('BiddingArea - isCurrentPlayerHuman:', isCurrentPlayerHuman)
-  console.log('BiddingArea - aiThinking:', aiThinking)
+
   
   return (
     <div className="bg-white rounded-lg p-4 shadow-sm border">

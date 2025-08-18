@@ -123,8 +123,6 @@ class TokenManager {
    * Handle token refresh failure
    */
   private handleRefreshFailure(): void {
-    console.log('Token refresh failed, redirecting to login...')
-    
     // Clear auth data
     useUserStore.getState().clearAuthData()
     

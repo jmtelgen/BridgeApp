@@ -121,12 +121,6 @@ export function useWebSocketMessages(roomId: string | undefined) {
   useEffect(() => {
     const originalError = console.error
     console.error = (...args) => {
-      if (args[0] && typeof args[0] === 'string' && args[0].includes('length')) {
-        console.log('LENGTH ERROR DETECTED!')
-        console.log('Error args:', args)
-        console.log('Current game data:', useGameStore.getState().gameData)
-        console.log('Current room state:', useRoomDataStore.getState().currentRoom)
-      }
       originalError.apply(console, args)
     }
     
@@ -144,19 +138,12 @@ export function useWebSocketMessages(roomId: string | undefined) {
 
     // Room update handlers
     const handleRoomUpdate = (data: any) => {
-      console.log('Received room update:', data)
-      console.log('Room update - updateType:', data.updateType)
-      console.log('Room update - assignedSeat:', data.assignedSeat)
-      console.log('Room update - newUser:', data.newUser)
-      console.log('Room update - room data:', data.room)
       
       // Handle all roomUpdated messages the same way - they all update the UI
       if (data.updateType === 'userJoined' && data.assignedSeat && data.newUser) {
-        console.log(`User ${data.newUser} joined and was assigned seat ${data.assignedSeat}`)
         
         // Update the current room's seats to reflect the new user
         const { currentRoom } = useRoomDataStore.getState()
-        console.log('Current room before update:', currentRoom)
         if (currentRoom) {
           const updatedRoom = {
             ...currentRoom,
@@ -167,12 +154,10 @@ export function useWebSocketMessages(roomId: string | undefined) {
           }
           console.log('Updated room:', updatedRoom)
           updateCurrentRoom(updatedRoom)
-          console.log('Updated room seats after user joined:', updatedRoom.seats)
         } else {
           console.log('No current room found, cannot update seats')
         }
       } else if (data.updateType === 'userLeft' && data.leftUser) {
-        console.log(`User ${data.leftUser} left the room`)
         
         // Update the current room's seats to remove the user
         const { currentRoom } = useRoomDataStore.getState()
@@ -202,14 +187,12 @@ export function useWebSocketMessages(roomId: string | undefined) {
     }
 
     const handlePlayerJoined = (data: any) => {
-      console.log('Player joined:', data)
       if (data.room) {
         updateCurrentRoom(data.room)
       }
     }
 
     const handlePlayerLeft = (data: any) => {
-      console.log('Player left:', data)
       if (data.room) {
         updateCurrentRoom(data.room)
       }
@@ -239,7 +222,6 @@ export function useWebSocketMessages(roomId: string | undefined) {
     }
 
     const handleBidUpdate = (data: BidUpdateMessage) => {
-      console.log('Received bid update:', data)
       if (data.gameData) {
         // Convert ServerGameData to GameData format
         const convertedGameData = {
@@ -259,10 +241,6 @@ export function useWebSocketMessages(roomId: string | undefined) {
     }
 
     const handleBidMade = (data: BidMadeMessage) => {
-      console.log('Received bid made:', data)
-      console.log('Bid made - bid:', data.bid)
-      console.log('Bid made - nextTurn:', data.nextTurn)
-      console.log('Bid made - gameData:', data.gameData)
       
       // Handle the bid data if provided
       if (data.bid) {
@@ -303,7 +281,6 @@ export function useWebSocketMessages(roomId: string | undefined) {
       if (data.gameData) {
         // Convert gameData to the expected format if needed
         const gameData = data.gameData
-        console.log('Bid made - processing gameData, currentPlayer before conversion:', gameData.currentPlayer)
         
         // Ensure hands are properly formatted for frontend
         if (gameData.hands) {
@@ -353,19 +330,12 @@ export function useWebSocketMessages(roomId: string | undefined) {
           }
         }
         
-        // Debug: Log the phase values
-        console.log('Bid made - gameData.phase:', gameData.phase)
-        console.log('Bid made - gameData.currentPhase:', gameData.currentPhase)
-        console.log('Bid made - data.roomState:', data.roomState)
-        
         // Ensure phase is not incorrectly set to "completed" during bidding
         if (data.roomState === "bidding" && gameData.phase === "completed") {
           console.log('Bid made - fixing incorrect phase from completed to bidding')
           gameData.phase = "bidding"
         }
-        
-        console.log('Bid made - gameData.currentPlayer after hands conversion:', gameData.currentPlayer)
-        
+                
         // Convert turn to currentPlayer if needed
         if (data.nextTurn && !gameData.currentPlayer) {
           // Convert user ID to position by checking which position this user is assigned to
@@ -376,7 +346,6 @@ export function useWebSocketMessages(roomId: string | undefined) {
             for (const [seatKey, playerId] of Object.entries(currentRoom.seats)) {
               if (playerId && data.nextTurn === playerId) {
                 gameData.currentPlayer = seatMapping[seatKey] || 'North'
-                console.log('Bid made - converted nextTurn to currentPlayer:', data.nextTurn, '->', gameData.currentPlayer)
                 break
               }
             }
@@ -780,7 +749,6 @@ export function useWebSocketMessages(roomId: string | undefined) {
             
             // Replace the hands object with the converted version
             gameData.hands = convertedHands
-            console.log('Start room - converted hands:', convertedHands)
           }
         }
         
@@ -813,7 +781,6 @@ export function useWebSocketMessages(roomId: string | undefined) {
           // If we couldn't find a match, default to the first available position
           if (!gameData.currentPlayer) {
             gameData.currentPlayer = 'North'
-            console.log('Start room - defaulted currentPlayer to:', gameData.currentPlayer)
           }
         }
         
@@ -830,10 +797,7 @@ export function useWebSocketMessages(roomId: string | undefined) {
           vulnerability: { NS: false, EW: false }
         } as any // Type assertion since we know the structure will be correct
         
-        console.log('Start room - about to set game state in store')
         useGameStore.getState().updateGameData(convertedGameData)
-        console.log('Start room - game state set in store')
-        console.log('Start room - current store state:', useGameStore.getState().gameData)
         setAiThinking(false)
       }
       
@@ -842,15 +806,11 @@ export function useWebSocketMessages(roomId: string | undefined) {
     }
 
     // Register all message handlers
-    console.log('useWebSocketMessages - registering handlers for roomId:', roomId)
     websocketService.onMessage(WebSocketActions.ROOM_UPDATE, handleRoomUpdate)
     websocketService.onMessage(WebSocketActions.PLAYER_JOINED, handlePlayerJoined)
     websocketService.onMessage(WebSocketActions.PLAYER_LEFT, handlePlayerLeft)
     websocketService.onMessage(WebSocketActions.ROOM_STARTED, handleStartRoom)
-    
-    // Also handle the specific roomUpdated action that includes updateType
-    websocketService.onMessage('roomUpdated', handleRoomUpdate)
-    console.log('useWebSocketMessages - handlers registered for roomUpdated')
+
     
     // Game state handlers
     websocketService.onMessage(WebSocketActions.GAME_STATE_UPDATE, handleGameStateUpdate)
@@ -866,7 +826,6 @@ export function useWebSocketMessages(roomId: string | undefined) {
       websocketService.offMessage(WebSocketActions.PLAYER_JOINED)
       websocketService.offMessage(WebSocketActions.PLAYER_LEFT)
       websocketService.offMessage(WebSocketActions.ROOM_STARTED)
-      websocketService.offMessage('roomUpdated')
       websocketService.offMessage(WebSocketActions.GAME_STATE_UPDATE)
       websocketService.offMessage(WebSocketActions.BID_UPDATE)
       websocketService.offMessage(WebSocketActions.BID_MADE) // Added offMessage for handleBidMade

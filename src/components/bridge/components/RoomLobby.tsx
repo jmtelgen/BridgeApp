@@ -20,7 +20,6 @@ export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
   // Listen for roomStarted events from WebSocket
   useEffect(() => {
     const handleStartRoom = (event: CustomEvent) => {
-      console.log('Start room event received in lobby:', event.detail)
       onStartGame()
     }
 

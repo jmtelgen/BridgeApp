@@ -73,7 +73,7 @@ export default function CreateAccountPage() {
       // Make API call to create account endpoint
       const response = await userAuthService.createAccount(accountData)
 
-      console.log('Account created successfully:', response.user.username)
+
       
       // Show success message
       setIsSuccess(true)

@@ -112,11 +112,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   
   setAiThinking: (thinking) => set({ aiThinking: thinking }),
   
-  // Add a method to update game data with logging
+  // Add a method to update game data
   updateGameData: (newGameData: GameData) => {
-    console.log('GameStore - updateGameData called with:', newGameData)
-    console.log('GameStore - newGameData.currentPlayer:', newGameData.currentPlayer)
-    console.log('GameStore - newGameData.tricks?.length:', newGameData.tricks?.length)
     set({ gameData: newGameData })
   },
 
@@ -191,7 +188,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       // Convert card to server format before sending
       const serverCard = cardToServerFormat(card)
-      console.log('Playing card - display format:', card.suit + card.rank, 'server format:', serverCard.suit + serverCard.rank)
       
       // Send card play via WebSocket
       await gameWebSocketService.playCard(currentRoom.roomId, userId, serverCard)
@@ -215,47 +211,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { getPlayerName, isRobot } = useRoomDataStore.getState()
     const currentPlayerName = getPlayerName(gameData.currentPlayer)
     
-    console.log('GameStore - handleAITurn called for player:', gameData.currentPlayer)
-    console.log('GameStore - handleAITurn - currentPlayerName:', currentPlayerName)
-    console.log('GameStore - handleAITurn - isRobot:', currentPlayerName ? isRobot(currentPlayerName) : false)
-    
     // Only handle AI turns for robot players
     if (!currentPlayerName) {
-      console.log('GameStore - handleAITurn - no player name found, returning')
       return
     }
     
     if (!isRobot(currentPlayerName)) {
-      console.log('GameStore - handleAITurn - not a robot player, returning')
       return
     }
-    
-    console.log('GameStore - handleAITurn - proceeding with AI turn')
-    console.log('GameStore - handleAITurn - gameData.currentTrick:', gameData.currentTrick)
-    console.log('GameStore - handleAITurn - gameData.tricks:', gameData.tricks)
-    console.log('GameStore - handleAITurn - gameData.tricks?.length:', gameData.tricks?.length)
-    console.log('GameStore - handleAITurn - gameData.hands:', gameData.hands)
-    console.log('GameStore - handleAITurn - current player hand:', gameData.hands[gameData.currentPlayer as keyof typeof gameData.hands])
     
     if (gameData.phase === "bidding") {
       set({ aiThinking: true })
       
       try {
         const aiHand = gameData.hands[gameData.currentPlayer]
-        console.log('GameStore - AI bidding - aiHand:', aiHand)
-        console.log('GameStore - AI bidding - aiHand length:', aiHand?.length)
-        console.log('GameStore - AI bidding - currentPlayer:', gameData.currentPlayer)
-        console.log('GameStore - AI bidding - bids:', gameData.bids)
-        console.log('GameStore - AI bidding - vulnerability:', gameData.vulnerability)
         
         const vulnerability = gameData.vulnerability.NS && gameData.vulnerability.EW ? 'both' :
                             gameData.vulnerability.NS ? 'ns' :
                             gameData.vulnerability.EW ? 'ew' : 'none'
         
-        console.log('GameStore - AI bidding - calculated vulnerability:', vulnerability)
-        
         const aiBidResult = getNextAIBid(aiHand, gameData.currentPlayer, gameData.bids, vulnerability)
-        console.log('GameStore - AI bidding - aiBidResult:', aiBidResult)
         
         get().makeBid(aiBidResult.type, aiBidResult.level as number, aiBidResult.suit)
       } catch (error) {
@@ -275,13 +250,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (shouldAIPlay) {
         // Check if AI has valid cards to play
         const hand = gameData.hands[gameData.currentPlayer]
-        console.log('GameStore - AI playing - hand:', hand)
-        console.log('GameStore - AI playing - hand.length:', hand?.length)
         const validCards = hand.filter((card: PlayingCard) => 
           canPlayCard(card, hand, gameData.currentTrick?.ledSuit || null)
         )
-        console.log('GameStore - AI playing - validCards:', validCards)
-        console.log('GameStore - AI playing - validCards.length:', validCards?.length)
         
         if (validCards.length === 0) {
           console.error(`AI has no valid cards to play for ${gameData.currentPlayer}`)
@@ -293,9 +264,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         set({ aiThinking: true })
         
         try {
-          console.log(`AI playing for ${gameData.currentPlayer}`)
           const aiCard = await aiPlay(gameData)
-          console.log(`AI chose card: ${aiCard.suit}${aiCard.rank}`)
           get().playCard(aiCard)
         } catch (error) {
           console.error("AI playing failed:", error)
@@ -304,13 +273,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
           handleApiError(error, "AI playing failed")
           // Fallback to first valid card
           const hand = gameData.hands[gameData.currentPlayer]
-          console.log('GameStore - AI fallback - hand:', hand)
-          console.log('GameStore - AI fallback - hand.length:', hand?.length)
           const validCards = hand.filter((card: PlayingCard) => 
             canPlayCard(card, hand, gameData.currentTrick?.ledSuit || null)
           )
-          console.log('GameStore - AI fallback - validCards:', validCards)
-          console.log('GameStore - AI fallback - validCards.length:', validCards?.length)
           if (validCards.length > 0) {
             get().playCard(validCards[0])
           }
