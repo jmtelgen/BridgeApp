@@ -46,8 +46,6 @@ export const userAuthService = {
    * User login
    */
   login: async (request: LoginRequest): Promise<LoginResponse> => {
-    console.log('Logging in with username:', request.username)
-    
     const response = await fetch('/api/account/login', {
       method: 'POST',
       headers: {
@@ -56,9 +54,6 @@ export const userAuthService = {
       body: JSON.stringify(request),
       credentials: 'include' // Important for cookies
     })
-
-    console.log('Login response status:', response.status)
-    console.log('Login response headers:', response.headers)
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -76,28 +71,18 @@ export const userAuthService = {
     }
 
     const responseData = await response.json()
-    console.log('Raw response data:', responseData)
     
     // Handle AWS Lambda/API Gateway response format
     let parsedData
     if (responseData.body) {
       try {
         parsedData = typeof responseData.body === 'string' ? JSON.parse(responseData.body) : responseData.body
-        console.log('Parsed body data:', parsedData)
       } catch (e) {
         console.error('Failed to parse response body:', e)
         throw new Error('Invalid response format from server')
       }
     } else {
       parsedData = responseData
-    }
-    
-    console.log('Final parsed data:', parsedData)
-    console.log('Parsed data keys:', Object.keys(parsedData))
-    if (parsedData.user) {
-      console.log('User object keys:', Object.keys(parsedData.user))
-    } else {
-      console.log('No user object found in parsed data')
     }
     
     return parsedData
@@ -107,8 +92,6 @@ export const userAuthService = {
    * User account creation
    */
   createAccount: async (request: CreateAccountRequest): Promise<CreateAccountResponse> => {
-    console.log('Creating account with data:', { ...request, password: '[REDACTED]' })
-    
     const response = await fetch('/api/account', {
       method: 'POST',
       headers: {
@@ -116,9 +99,6 @@ export const userAuthService = {
       },
       body: JSON.stringify(request)
     })
-
-    console.log('Create account response status:', response.status)
-    console.log('Create account response headers:', response.headers)
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -141,14 +121,12 @@ export const userAuthService = {
     }
 
     const responseData = await response.json()
-    console.log('Raw create account response data:', responseData)
     
     // Handle AWS Lambda/API Gateway response format
     let parsedData
     if (responseData.body) {
       try {
         parsedData = typeof responseData.body === 'string' ? JSON.parse(responseData.body) : responseData.body
-        console.log('Parsed create account body data:', parsedData)
       } catch (e) {
         console.error('Failed to parse create account response body:', e)
         throw new Error('Invalid response format from server')
@@ -156,8 +134,6 @@ export const userAuthService = {
     } else {
       parsedData = responseData
     }
-    
-    console.log('Final parsed create account data:', parsedData)
     return parsedData
   },
 
@@ -165,7 +141,7 @@ export const userAuthService = {
    * Refresh access token using refresh token
    */
   refreshToken: async (): Promise<RefreshTokenResponse> => {
-    const response = await fetch('/api/auth/refresh-token', {
+    const response = await fetch('/api/auth/refresh', {
       method: 'POST',
       credentials: 'include' // This will automatically include the refresh token cookie
     })
@@ -174,7 +150,21 @@ export const userAuthService = {
       throw new Error('Token refresh failed')
     }
 
-    return response.json()
+    const responseData = await response.json()
+    
+    // Handle AWS Lambda/API Gateway response format
+    let parsedData
+    if (responseData.body) {
+      try {
+        parsedData = typeof responseData.body === 'string' ? JSON.parse(responseData.body) : responseData.body
+      } catch (e) {
+        console.error('Failed to parse refresh token response body:', e)
+        throw new Error('Invalid response format from server')
+      }
+    } else {
+      parsedData = responseData
+    }
+    return parsedData
   },
 
   /**

@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { userAuthService } from '../services/userAuthService'
+import { tokenManager } from '../services/tokenManager'
 
 interface User {
   userId: string
@@ -17,6 +19,7 @@ interface UserStore {
   isAuthenticated: boolean
   accessToken: string | null
   user: User | null
+  wasAuthenticated: boolean // Flag for token refresh on page load
   
   // Methods
   generateUserId: () => string
@@ -30,6 +33,7 @@ interface UserStore {
   getAccessToken: () => string | null
   updateAccessToken: (newToken: string) => void
   logout: () => Promise<void>
+  attemptTokenRefresh: () => Promise<boolean>
 }
 
 // Generate a random user ID
@@ -51,6 +55,7 @@ export const useUserStore = create<UserStore>()(
       isAuthenticated: false,
       accessToken: null,
       user: null,
+      wasAuthenticated: false,
 
       generateUserId: () => {
         const currentUserId = get().userId
@@ -60,7 +65,6 @@ export const useUserStore = create<UserStore>()(
 
         const newUserId = generateRandomUserId()
         set({ userId: newUserId })
-        console.log('Generated new user ID:', newUserId)
         return newUserId
       },
 
@@ -78,20 +82,16 @@ export const useUserStore = create<UserStore>()(
       
       // Authentication methods
       setAuthData: (accessToken: string, user: User) => {
-        set({ isAuthenticated: true, accessToken, user })
+        set({ isAuthenticated: true, accessToken, user, wasAuthenticated: true })
         
         // Initialize token monitoring when user logs in
-        import('../services/tokenManager').then(({ tokenManager }) => {
-          tokenManager.initialize()
-        })
+        tokenManager.initialize()
       },
       clearAuthData: () => {
-        set({ isAuthenticated: false, accessToken: null, user: null })
+        set({ isAuthenticated: false, accessToken: null, user: null, wasAuthenticated: false })
         
         // Stop token monitoring when user logs out
-        import('../services/tokenManager').then(({ tokenManager }) => {
-          tokenManager.stopTokenMonitoring()
-        })
+        tokenManager.stopTokenMonitoring()
       },
       getAccessToken: () => {
         return get().accessToken
@@ -102,14 +102,37 @@ export const useUserStore = create<UserStore>()(
       logout: async () => {
         // In a real application, you would call an auth service to log out
         // For now, we'll just clear the data locally
-        set({ isAuthenticated: false, accessToken: null, user: null })
+        set({ isAuthenticated: false, accessToken: null, user: null, wasAuthenticated: false })
         
         // Stop token monitoring
-        import('../services/tokenManager').then(({ tokenManager }) => {
-          tokenManager.stopTokenMonitoring()
-        })
-        
-        console.log('User logged out.')
+        tokenManager.stopTokenMonitoring()
+      },
+      
+      attemptTokenRefresh: async () => {
+        try {
+          const response = await userAuthService.refreshToken()
+          
+          if (response.accessToken) {
+            // Update the store with new token
+            set({ 
+              isAuthenticated: true, 
+              accessToken: response.accessToken,
+              user: get().user, // Keep existing user data
+              wasAuthenticated: true
+            })
+            
+            // Initialize token monitoring
+            tokenManager.initialize()
+            
+            return true
+          } else {
+            throw new Error('No access token in refresh response')
+          }
+        } catch (error) {
+          // Clear auth data if refresh fails
+          set({ isAuthenticated: false, accessToken: null, user: null, wasAuthenticated: false })
+          return false
+        }
       }
     }),
     {
@@ -117,8 +140,15 @@ export const useUserStore = create<UserStore>()(
       partialize: (state) => ({ 
         userId: state.userId,
         playerName: state.playerName,
-        // Note: accessToken and user are NOT persisted to localStorage for security
-        // They are only stored in memory and will be cleared on page refresh
+        // Store minimal auth info for token refresh on page load
+        // We'll store a flag indicating the user was previously authenticated
+        wasAuthenticated: state.isAuthenticated,
+        // Store user info (without sensitive data) for better UX
+        user: state.user ? {
+          userId: state.user.userId,
+          username: state.user.username,
+          email: state.user.email
+        } : null
       })
     }
   )

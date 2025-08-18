@@ -9,6 +9,7 @@ import { useUserStore } from './stores/userStore';
 import { Toaster } from './components/ui/toaster';
 import { websocketService } from './services/websocketService';
 import { useWebSocketCleanup } from './hooks/useWebSocketCleanup';
+import { useAutoTokenRefresh } from './hooks/useAutoTokenRefresh';
 import { Position } from './components/bridge/types';
 
 // Room component that shows at the root
@@ -77,29 +78,24 @@ function RoomGameWrapper() {
 
 export function App() {
   const { generateUserId } = useUserStore()
+  
+  // Use auto token refresh hook
+  const { isRefreshing, shouldShowLogin } = useAutoTokenRefresh()
 
   // Initialize user ID on app start (WebSocket connection will happen when needed)
   useEffect(() => {
     // Generate user ID on initial page load
     const userId = generateUserId()
-    console.log('App initialized with user ID:', userId)
     // Note: WebSocket connection will be established when user creates or joins a room
 
     // Handle page unload (browser close, refresh, navigation)
     const handleBeforeUnload = () => {
-      console.log('Page unloading, cleaning up WebSocket connection')
       websocketService.disconnect()
     }
 
     // Handle page visibility change (tab switching)
     const handleVisibilityChange = () => {
-      if (document.hidden) {
-        console.log('Page hidden, keeping WebSocket connection alive')
-        // Don't disconnect when tab is hidden, only when tab is closed
-      } else {
-        console.log('Page visible, WebSocket connection maintained')
-        // Connection should still be active from previous room creation/joining
-      }
+      // Don't disconnect when tab is hidden, only when tab is closed
     }
 
     // Add event listeners
@@ -108,12 +104,23 @@ export function App() {
 
     // Cleanup function to remove event listeners when app unmounts
     return () => {
-      console.log('App unmounting, removing event listeners')
       window.removeEventListener('beforeunload', handleBeforeUnload)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       // Don't disconnect WebSocket on app unmount - only on tab close
     }
   }, [generateUserId])
+
+  // Show loading state while attempting token refresh
+  if (isRefreshing) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Refreshing authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

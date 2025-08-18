@@ -52,12 +52,10 @@ class WebSocketService {
    */
   async connect(): Promise<void> {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      console.log('WebSocket already connected')
       return Promise.resolve()
     }
 
     if (this.isConnecting && this.connectionPromise) {
-      console.log('WebSocket connection already in progress')
       return this.connectionPromise
     }
 
@@ -65,11 +63,9 @@ class WebSocketService {
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
         const wsUrl = this.getWebSocketUrl()
-        console.log('Connecting to WebSocket with URL:', wsUrl)
         this.ws = new WebSocket(wsUrl)
 
         this.ws.onopen = () => {
-          console.log('WebSocket connected')
           this.reconnectAttempts = 0
           this.isConnecting = false
           resolve()
@@ -82,7 +78,6 @@ class WebSocketService {
         }
 
         this.ws.onclose = (event) => {
-          console.log('WebSocket disconnected:', event.code, event.reason)
           this.isConnecting = false
           this.handleDisconnect().catch(error => {
             console.error('Error handling WebSocket disconnect:', error)
@@ -126,7 +121,6 @@ class WebSocketService {
 
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       const messageString = JSON.stringify(message)
-      console.log('Sending WebSocket message:', messageString)
       this.ws.send(messageString)
     } else {
       throw new Error('WebSocket is not connected')
@@ -139,18 +133,10 @@ class WebSocketService {
   private async handleMessage(data: string): Promise<void> {
     try {
       const message: WebSocketResponse = JSON.parse(data)
-      console.log('Received WebSocket message:', message)
-      console.log('Message action:', message.action)
-      console.log('Message success:', message.success)
-      console.log('Message updateType:', (message as any).updateType)
 
       const handler = this.messageHandlers.get(message.action)
       if (handler) {
-        console.log(`Calling handler for action: ${message.action}`)
         handler(message)
-      } else {
-        console.log(`No handler registered for action: ${message.action}`)
-        console.log('Available handlers:', Array.from(this.messageHandlers.keys()))
       }
 
       // Handle errors
@@ -170,7 +156,6 @@ class WebSocketService {
   private async handleDisconnect(): Promise<void> {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++
-      console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
       
       setTimeout(() => {
         this.connect().catch(error => {
@@ -228,8 +213,6 @@ class WebSocketService {
    * Cleanup room-specific subscriptions and handlers
    */
   cleanupRoom(roomId: string): void {
-    console.log(`Cleaning up WebSocket handlers for room: ${roomId}`)
-    
     // Remove all message handlers for this room
     this.messageHandlers.forEach((handler, action) => {
       if (action.includes('game_state') || action.includes('room')) {
@@ -269,24 +252,20 @@ export const roomWebSocketService = {
       timestamp: Date.now()
     }
 
-    console.log('Sending WebSocket createRoom message:', JSON.stringify(message, null, 2))
     await websocketService.sendMessage(message)
     
     // Wait for the actual response from the server
     // The server might respond with either CREATE_ROOM or roomUpdated action
     return new Promise((resolve) => {
       const createRoomHandler = (data: any) => {
-        console.log('Received CREATE_ROOM response:', data)
         websocketService.offMessage(WebSocketActions.CREATE_ROOM)
         websocketService.offMessage('roomUpdated')
         resolve(data)
       }
       
       const roomUpdatedHandler = (data: any) => {
-        console.log('Received roomUpdated response for create room:', data)
         // Resolve for any roomUpdated message with room data
         if (data.room && data.updateType === 'roomCreated') {
-          console.log('Promise handler resolving for create room')
           websocketService.offMessage(WebSocketActions.CREATE_ROOM)
           // Don't remove the roomUpdated handler here - let the event handler keep it
           resolve(data)
@@ -327,24 +306,20 @@ export const roomWebSocketService = {
       timestamp: Date.now()
     }
 
-    console.log('Sending WebSocket joinRoom message:', JSON.stringify(message, null, 2))
     await websocketService.sendMessage(message)
     
     // Wait for the actual response from the server
     // The server might respond with either JOIN_ROOM or roomUpdated action
     return new Promise((resolve) => {
       const joinRoomHandler = (data: any) => {
-        console.log('Received JOIN_ROOM response:', data)
         websocketService.offMessage(WebSocketActions.JOIN_ROOM)
         websocketService.offMessage('roomUpdated')
         resolve(data)
       }
       
       const roomUpdatedHandler = (data: any) => {
-        console.log('Received roomUpdated response for join room:', data)
         // Resolve for any roomUpdated message with room data
         if (data.room && data.updateType === 'userJoined') {
-          console.log('Promise handler resolving for join room')
           websocketService.offMessage(WebSocketActions.JOIN_ROOM)
           // Don't remove the roomUpdated handler here - let the event handler keep it
           resolve(data)

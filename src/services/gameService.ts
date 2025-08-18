@@ -148,7 +148,6 @@ export const gameService = {
    * Cleanup game-specific WebSocket subscriptions
    */
   cleanupGame: (roomId: string) => {
-    console.log(`Cleaning up game WebSocket subscriptions for room: ${roomId}`)
     websocketService.cleanupRoom(roomId)
   }
 } 

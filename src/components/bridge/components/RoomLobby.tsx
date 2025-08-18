@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, Users, Bot, User, Play, RefreshCw } from "lucide-react"
 import { useRoomDataStore } from "../../../stores/roomDataStore"
 import { useUserStore } from "../../../stores/userStore"
+import { roomWebSocketService } from "../../../services/websocketService"
 
 interface RoomLobbyProps {
   onStartGame: () => void
@@ -54,7 +55,6 @@ export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
     
     try {
       // Send start room message via WebSocket
-      const { roomWebSocketService } = await import('../../../services/websocketService')
       const userId = useUserStore.getState().userId
       
       if (!currentRoom?.roomId || !userId) {

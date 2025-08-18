@@ -55,7 +55,6 @@ export const roomService = {
 
     try {
       // Establish WebSocket connection before creating room
-      console.log('Establishing WebSocket connection for room creation...')
       await websocketService.connect()
       
       // Try WebSocket first
@@ -68,8 +67,6 @@ export const roomService = {
       })
 
       if (wsResponse.success) {
-        console.log('Room created successfully via WebSocket')
-        
         // The WebSocket response contains the room data directly
         return {
           data: { room: wsResponse.room },
@@ -110,7 +107,6 @@ export const roomService = {
 
     try {
       // Establish WebSocket connection before joining room
-      console.log('Establishing WebSocket connection for room joining...')
       await websocketService.connect()
       
       // Try WebSocket first
@@ -121,8 +117,6 @@ export const roomService = {
       })
 
       if (wsResponse.success) {
-        console.log('Joined room successfully via WebSocket')
-        
         // The WebSocket response contains the room data directly
         return {
           data: { room: wsResponse.room },

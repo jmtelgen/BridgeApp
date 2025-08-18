@@ -1,5 +1,8 @@
 
 
+import { useUserStore } from '../stores/userStore'
+import { tokenManager } from './tokenManager'
+
 export interface ApiResponse<T> {
   data: T | null
   error: string | null
@@ -28,6 +31,28 @@ export async function apiCall<T>(
   url: string, 
   options: ApiOptions = {}
 ): Promise<ApiResponse<T>> {
+  
+  // Helper function to retry requests after token refresh
+  const retryRequest = async (retryUrl: string, retryOptions: ApiOptions): Promise<ApiResponse<T>> => {
+    // Get the updated access token for the retry
+    let accessToken: string | null = null
+    try {
+      accessToken = useUserStore.getState().accessToken
+    } catch (error) {
+      console.warn('Could not get access token for retry:', error)
+    }
+
+    // Update headers with new access token
+    const updatedOptions = {
+      ...retryOptions,
+      headers: {
+        ...retryOptions.headers,
+        ...(accessToken && !retryOptions.headers?.Authorization ? { Authorization: `Bearer ${accessToken}` } : {})
+      }
+    }
+    
+    return apiCall<T>(retryUrl, updatedOptions)
+  }
   const {
     method = 'GET',
     headers = {},
@@ -38,16 +63,19 @@ export async function apiCall<T>(
     errorMessage = 'An error occurred'
   } = options
 
-  // Check if token is expired before making request
+  // Ensure token is valid before making request
   try {
-    const { tokenManager } = await import('./tokenManager')
-    if (tokenManager.isTokenExpired()) {
-      console.warn('Token expired, redirecting to login...')
-      window.location.href = '/login'
-      return {
-        data: null,
-        error: 'Token expired',
-        success: false
+    // Wait for any ongoing token refresh to complete
+    if (tokenManager.isTokenRefreshInProgress()) {
+      const refreshSuccess = await tokenManager.waitForTokenRefresh()
+      if (!refreshSuccess) {
+        console.warn('Token refresh failed, request will likely fail')
+      }
+    } else {
+      // Ensure token is valid (refresh if needed)
+      const tokenValid = await tokenManager.ensureValidToken()
+      if (!tokenValid) {
+        console.warn('Failed to ensure valid token, request will likely fail')
       }
     }
   } catch (error) {
@@ -58,35 +86,60 @@ export async function apiCall<T>(
   // Prefix with /api if not already present
   const apiUrl = url.startsWith('/api') ? url : `/api${url}`
 
+  // Get access token for authenticated requests
+  let accessToken: string | null = null
   try {
-    console.log('Making API request to:', apiUrl)
+    accessToken = useUserStore.getState().accessToken
+  } catch (error) {
+    console.warn('Could not get access token:', error)
+  }
+
+  // Add Authorization header if we have an access token and it's not already provided
+  const requestHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...headers,
+  }
+
+  if (accessToken && !headers.Authorization) {
+    requestHeaders.Authorization = `Bearer ${accessToken}`
+  }
+
+  try {
     const response = await fetch(apiUrl, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
+      headers: requestHeaders,
       body: body ? JSON.stringify(body) : undefined,
       redirect: 'follow', // Follow redirects automatically
-    })
-    
-    console.log('Response received:', {
-      status: response.status,
-      statusText: response.statusText,
-      url: response.url
     })
 
     if (!response.ok) {
       // Handle 401 Unauthorized responses specifically
       if (response.status === 401) {
-        console.log('Authentication required (401), redirecting to login...')
-        // Redirect the user to the login page
-        window.location.href = '/login'
-        
-        return {
-          data: null,
-          error: 'Authentication required',
-          success: false
+        try {
+          // Try to refresh the token
+          const refreshSuccess = await tokenManager.ensureValidToken()
+          
+          if (refreshSuccess) {
+            // Retry the original request with new token
+            return retryRequest(apiUrl, options)
+          } else {
+            // If refresh fails, redirect to login
+            window.location.href = '/login'
+            return {
+              data: null,
+              error: 'Authentication required',
+              success: false
+            }
+          }
+        } catch (error) {
+          console.error('Error during token refresh:', error)
+          // If refresh fails, redirect to login
+          window.location.href = '/login'
+          return {
+            data: null,
+            error: 'Authentication required',
+            success: false
+          }
         }
       }
       
