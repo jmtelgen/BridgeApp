@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Users, Bot, User, Play, RefreshCw } from "lucide-react"
+import { Loader2, Users, Bot, User, Play, RefreshCw, ArrowLeft, Share2 } from "lucide-react"
 import { useRoomDataStore } from "../../../stores/roomDataStore"
 import { useUserStore } from "../../../stores/userStore"
 import { roomWebSocketService } from "../../../services/websocketService"
@@ -84,212 +84,211 @@ export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
     return seatNames[seat] || seat
   }
 
-
-
   const isCurrentPlayer = (seatPlayerName: string) => {
     return seatPlayerName === playerName
   }
 
+  const handleShare = () => {
+    const shareUrl = `${window.location.origin}/room/${currentRoom.roomId}`
+    navigator.clipboard.writeText(shareUrl)
+    // Could add toast notification here
+  }
+
+  const getPlayerInitial = (playerName: string) => {
+    return playerName ? playerName.charAt(0).toUpperCase() : "?"
+  }
+
+  const getPlayerColor = (seat: string) => {
+    const colors: Record<string, string> = {
+      "N": "from-blue-500 to-blue-600",
+      "S": "from-emerald-500 to-emerald-600",
+      "E": "from-pink-500 to-pink-600",
+      "W": "from-purple-500 to-purple-600"
+    }
+    return colors[seat] || "from-gray-500 to-gray-600"
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">{currentRoom.roomName}</h1>
-          <p className="text-lg text-gray-600">Room ID: {currentRoom.roomId}</p>
-          <div className="mt-2">
-            <Badge variant={currentRoom.isPrivate ? "destructive" : "outline"}>
-              {currentRoom.isPrivate ? "Private Room" : "Public Room"}
-            </Badge>
-          </div>
-        </div>
+    <main className="min-h-screen bg-gradient-to-br from-green-800 via-green-700 to-green-900 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-600/20 via-transparent to-green-900/40"></div>
 
-        {/* Seat Layout */}
-        <div className="grid grid-cols-5 gap-4 h-[400px] mb-8">
-          {/* West Player */}
-          <div className="flex flex-col justify-center">
-            <Card className="text-center p-4">
-              <div className="mb-2">
-                {seats["W"] ? (
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    {isRobot(seats["W"]) ? (
-                      <Bot className="w-5 h-5 text-blue-600" />
-                    ) : (
-                      <User className="w-5 h-5 text-green-600" />
-                    )}
-                    <Badge variant={isCurrentPlayer(seats["W"]) ? "default" : "outline"}>
-                      {isCurrentPlayer(seats["W"]) ? "You" : seats["W"]}
-                    </Badge>
-                  </div>
-                ) : (
-                  <div className="text-gray-400">
-                    <Users className="w-8 h-8 mx-auto mb-2" />
-                    <p className="text-sm">Empty</p>
-                  </div>
-                )}
-              </div>
-              <Badge variant="secondary">West</Badge>
-            </Card>
-          </div>
-
-          {/* Center Column */}
-          <div className="col-span-3 flex flex-col">
-            {/* North Player */}
-            <div className="mb-4">
-              <Card className="text-center p-4">
-                <div className="mb-2">
-                  {seats["N"] ? (
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      {isRobot(seats["N"]) ? (
-                        <Bot className="w-5 h-5 text-blue-600" />
-                      ) : (
-                        <User className="w-5 h-5 text-green-600" />
-                      )}
-                      <Badge variant={isCurrentPlayer(seats["N"]) ? "default" : "outline"}>
-                        {isCurrentPlayer(seats["N"]) ? "You" : seats["N"]}
-                      </Badge>
-                    </div>
-                  ) : (
-                    <div className="text-gray-400">
-                      <Users className="w-8 h-8 mx-auto mb-2" />
-                      <p className="text-sm">Empty</p>
-                    </div>
-                  )}
-                </div>
-                <Badge variant="secondary">North</Badge>
-              </Card>
-            </div>
-
-            {/* Center Area */}
-            <div className="flex-1 flex items-center justify-center">
-              <Card className="p-6 text-center">
-                <div className="mb-4">
-                  <h3 className="text-xl font-semibold text-gray-800 mb-2">Waiting for Players</h3>
-                  <p className="text-gray-600">
-                    {occupiedSeats.length}/4 players joined
-                  </p>
-                </div>
-                
-                {isOwner && (
-                  <Button 
-                    onClick={handleStartGame}
-                    disabled={!isReadyToStart || isStarting}
-                    className="flex items-center gap-2"
-                  >
-                    {isStarting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Play className="w-4 h-4" />
-                    )}
-                    {isStarting ? "Starting..." : "Start Game"}
-                  </Button>
-                )}
-                
-                {!isOwner && (
-                  <p className="text-sm text-gray-500">
-                    Waiting for host to start the game...
-                  </p>
-                )}
-              </Card>
-            </div>
-
-            {/* South Player */}
-            <div className="mt-4">
-              <Card className="text-center p-4">
-                <div className="mb-2">
-                  {seats["S"] ? (
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      {isRobot(seats["S"]) ? (
-                        <Bot className="w-5 h-5 text-blue-600" />
-                      ) : (
-                        <User className="w-5 h-5 text-green-600" />
-                      )}
-                      <Badge variant={isCurrentPlayer(seats["S"]) ? "default" : "outline"}>
-                        {isCurrentPlayer(seats["S"]) ? "You" : seats["S"]}
-                      </Badge>
-                    </div>
-                  ) : (
-                    <div className="text-gray-400">
-                      <Users className="w-8 h-8 mx-auto mb-2" />
-                      <p className="text-sm">Empty</p>
-                    </div>
-                  )}
-                </div>
-                <Badge variant="secondary">South</Badge>
-              </Card>
-            </div>
-          </div>
-
-          {/* East Player */}
-          <div className="flex flex-col justify-center">
-            <Card className="text-center p-4">
-              <div className="mb-2">
-                {seats["E"] ? (
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    {isRobot(seats["E"]) ? (
-                      <Bot className="w-5 h-5 text-blue-600" />
-                    ) : (
-                      <User className="w-5 h-5 text-green-600" />
-                    )}
-                    <Badge variant={isCurrentPlayer(seats["E"]) ? "default" : "outline"}>
-                      {isCurrentPlayer(seats["E"]) ? "You" : seats["E"]}
-                    </Badge>
-                  </div>
-                ) : (
-                  <div className="text-gray-400">
-                    <Users className="w-8 h-8 mx-auto mb-2" />
-                    <p className="text-sm">Empty</p>
-                  </div>
-                )}
-              </div>
-              <Badge variant="secondary">East</Badge>
-            </Card>
-          </div>
-        </div>
-
-        {/* Legend */}
-        <div className="text-center mb-6">
-          <div className="flex justify-center gap-6">
+      <div className="fixed inset-0 z-20 pointer-events-none">
+        {/* North Player - Top */}
+        <div className="absolute top-8 left-1/2 transform -translate-x-1/2 rotate-180 pointer-events-auto">
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg">
             <div className="flex items-center gap-2">
-              <User className="w-4 h-4 text-green-600" />
-              <span className="text-sm text-gray-600">Human Player</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Bot className="w-4 h-4 text-blue-600" />
-              <span className="text-sm text-gray-600">AI/Robot</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex justify-center gap-4">
-          <Button onClick={onLeaveRoom} variant="outline">
-            Leave Room
-          </Button>
-          <Button 
-            onClick={() => window.location.reload()} 
-            variant="outline"
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </Button>
-          {isOwner && (
-            <Button 
-              onClick={handleStartGame}
-              disabled={!isReadyToStart || isStarting}
-              className="flex items-center gap-2"
-            >
-              {isStarting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+              {seats["N"] ? (
+                <>
+                  <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("N")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
+                    {isRobot(seats["N"]) ? "🤖" : getPlayerInitial(seats["N"])}
+                  </div>
+                  <span className="font-semibold text-gray-800">
+                    {isCurrentPlayer(seats["N"]) ? "You" : seats["N"]}
+                  </span>
+                </>
               ) : (
-                <Play className="w-4 h-4" />
+                <>
+                  <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                    ?
+                  </div>
+                  <span className="font-semibold text-gray-600">Empty</span>
+                </>
               )}
-              {isStarting ? "Starting..." : "Start Game"}
-            </Button>
-          )}
+            </div>
+          </div>
+        </div>
+
+        {/* West Player - Left */}
+        <div className="absolute left-8 top-1/2 transform -translate-y-1/2 rotate-90 pointer-events-auto">
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg">
+            <div className="flex items-center gap-2">
+              {seats["W"] ? (
+                <>
+                  <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("W")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
+                    {isRobot(seats["W"]) ? "🤖" : getPlayerInitial(seats["W"])}
+                  </div>
+                  <span className="font-semibold text-gray-800">
+                    {isCurrentPlayer(seats["W"]) ? "You" : seats["W"]}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                    ?
+                  </div>
+                  <span className="font-semibold text-gray-600">Empty</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* East Player - Right */}
+        <div className="absolute right-8 top-1/2 transform -translate-y-1/2 -rotate-90 pointer-events-auto">
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg">
+            <div className="flex items-center gap-2">
+              {seats["E"] ? (
+                <>
+                  <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("E")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
+                    {isRobot(seats["E"]) ? "🤖" : getPlayerInitial(seats["E"])}
+                  </div>
+                  <span className="font-semibold text-gray-800">
+                    {isCurrentPlayer(seats["E"]) ? "You" : seats["E"]}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                    ?
+                  </div>
+                  <span className="font-semibold text-gray-600">Empty</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* South Player - Bottom (You) */}
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 pointer-events-auto">
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg">
+            <div className="flex items-center gap-2">
+              {seats["S"] ? (
+                <>
+                  <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("S")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
+                    {isRobot(seats["S"]) ? "🤖" : getPlayerInitial(seats["S"])}
+                  </div>
+                  <span className="font-semibold text-gray-800">
+                    {isCurrentPlayer(seats["S"]) ? "You" : seats["S"]}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                    ?
+                  </div>
+                  <span className="font-semibold text-gray-600">Empty</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto">
+          <div className="bg-white rounded-lg shadow-xl p-4 min-w-[200px]">
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <div className="text-sm text-gray-600 mb-1">Room Code</div>
+              <div className="flex items-center justify-between">
+                <span className="font-mono font-bold text-lg text-gray-800">{currentRoom.roomId}</span>
+                <button
+                  onClick={handleShare}
+                  className="p-1 hover:bg-gray-200 rounded transition-colors"
+                  title="Copy share link"
+                >
+                  <Share2 className="w-4 h-4 text-gray-600" />
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <div className="text-sm text-gray-600 mb-1">Room Name</div>
+              <div className="font-semibold text-gray-800">{currentRoom.roomName}</div>
+              <div className="mt-2">
+                <Badge variant={currentRoom.isPrivate ? "destructive" : "outline"}>
+                  {currentRoom.isPrivate ? "Private Room" : "Public Room"}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <div className="text-sm text-gray-600 mb-1">Players</div>
+              <div className="font-semibold text-gray-800">{occupiedSeats.length}/4 players joined</div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left">
+                <Users className="w-5 h-5 text-green-600" />
+                <span className="font-medium text-gray-800">Invite Friends</span>
+              </button>
+
+              <button 
+                onClick={onLeaveRoom}
+                className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
+              >
+                <ArrowLeft className="w-5 h-5 text-gray-600" />
+                <span className="font-medium text-gray-800">Leave Game</span>
+              </button>
+
+              {isOwner && (
+                <button 
+                  onClick={handleStartGame}
+                  disabled={!isReadyToStart || isStarting}
+                  className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isStarting ? (
+                    <Loader2 className="w-5 h-5 text-green-600 animate-spin" />
+                  ) : (
+                    <Play className="w-5 h-5 text-green-600" />
+                  )}
+                  <span className="font-medium text-gray-800">
+                    {isStarting ? "Starting..." : "Start Game"}
+                  </span>
+                </button>
+              )}
+
+              {!isOwner && (
+                <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 text-gray-600 animate-spin" />
+                    <span className="font-medium text-gray-600">Waiting for host to start...</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+
+      <div className="relative z-10 w-full h-screen">{/* Future components will go here */}</div>
+    </main>
   )
 }

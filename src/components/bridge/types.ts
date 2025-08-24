@@ -47,4 +47,48 @@ export interface GameData {
     NS: boolean
     EW: boolean
   }
+}
+
+// New types for seat-based response format
+export interface PublicGameState {
+  currentPhase: string
+  turn: string
+  dealer: string
+  vulnerability: string
+  bids: any[]
+  tricks: any[]
+  contract: string | null
+  declarer: string | null
+  openingLeader: string | null
+  currentTrick: any[] | null
+  trickWinner: string | null
+  dummy: string | null
+  dummyHand: string[] | null
+  previousTrick: any | null
+  gameResult: string | null
+}
+
+export interface PrivateGameState {
+  seat: string
+  hand: string[]
+  validBids: string[] | null
+  isMyTurn: boolean
+  isDeclarer: boolean
+  isDummy: boolean
+  partnerSeat: string | null
+}
+
+export interface SeatBasedGameResponse {
+  publicState: PublicGameState
+  privateState: PrivateGameState
+  seat: string
+  playerId: string
+  lastAction: any | null
+  message: string | null
+}
+
+export interface BroadcastMessage {
+  publicState: PublicGameState
+  lastAction: any | null
+  message: string | null
 } 

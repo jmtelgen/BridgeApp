@@ -97,6 +97,10 @@ interface GameStore {
   
   // AI Actions
   handleAITurn: () => Promise<void>
+  
+  // New methods for seat-based logic
+  isMyTurn: () => boolean
+  canMakeMove: () => boolean
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -284,5 +288,67 @@ export const useGameStore = create<GameStore>((set, get) => ({
         }
       }
     }
+  },
+
+  // New methods for seat-based logic
+  isMyTurn: () => {
+    const { gameData } = get()
+    const { getCurrentPlayerPosition } = useRoomDataStore.getState()
+    const currentPlayerPosition = getCurrentPlayerPosition()
+    
+    // Check if it's the current player's turn
+    const isTurn = gameData.currentPlayer === currentPlayerPosition
+    console.log('isMyTurn check:', {
+      currentPlayerPosition,
+      gameDataCurrentPlayer: gameData.currentPlayer,
+      isTurn
+    })
+    return isTurn
+  },
+
+  canMakeMove: () => {
+    const { gameData } = get()
+    const { getCurrentPlayerPosition } = useRoomDataStore.getState()
+    const currentPlayerPosition = getCurrentPlayerPosition()
+    
+    // Check if it's the current player's turn and they have a hand
+    if (gameData.currentPlayer !== currentPlayerPosition) {
+      console.log('canMakeMove: not current player turn', {
+        currentPlayerPosition,
+        gameDataCurrentPlayer: gameData.currentPlayer
+      })
+      return false
+    }
+    
+    const currentHand = gameData.hands[currentPlayerPosition]
+    if (!currentHand || currentHand.length === 0) {
+      console.log('canMakeMove: no hand available', {
+        currentPlayerPosition,
+        handLength: currentHand?.length
+      })
+      return false
+    }
+    
+    // For playing phase, check if there are valid cards to play
+    if (gameData.phase === "playing") {
+      const validCards = currentHand.filter((card: PlayingCard) => 
+        canPlayCard(card, currentHand, gameData.currentTrick?.ledSuit || null)
+      )
+      const canMove = validCards.length > 0
+      console.log('canMakeMove: playing phase', {
+        currentPlayerPosition,
+        handLength: currentHand.length,
+        validCardsLength: validCards.length,
+        canMove
+      })
+      return canMove
+    }
+    
+    // For bidding phase, always allow moves
+    console.log('canMakeMove: bidding phase - allowing move', {
+      currentPlayerPosition,
+      handLength: currentHand.length
+    })
+    return gameData.phase === "bidding"
   }
 })) 

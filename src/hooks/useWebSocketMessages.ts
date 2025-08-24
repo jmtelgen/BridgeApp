@@ -3,7 +3,7 @@ import { websocketService } from '../services/websocketService'
 import { useRoomDataStore } from '../stores/roomDataStore'
 import { useGameStore } from '../stores/gameStore'
 import { WebSocketActions } from '../config/websocket'
-import { Position } from '../components/bridge/types'
+import { Position, SeatBasedGameResponse, BroadcastMessage } from '../components/bridge/types'
 import { useUserStore } from '../stores/userStore'
 import { 
   getAllPositions, 
@@ -11,6 +11,7 @@ import {
   getFrontendToServerPositionMap,
   getEmptyPositionObject
 } from '../utils/positionUtils'
+import { convertSeatBasedResponseToGameData } from '../utils/gameStateConverter'
 
 // TypeScript interfaces for WebSocket message data
 interface ServerBid {
@@ -19,55 +20,53 @@ interface ServerBid {
   timestamp: number
 }
 
-interface ServerGameData {
-  bids?: ServerBid[]
-  tricks: any[]
-  turn: string
-  hands: Record<string, string[]>
-  currentPhase: string
-  phase?: string
-  currentPlayer?: string
-  currentTrick?: Array<{
-    seat: string
-    card: string
+// Seat-based message interfaces
+interface BidMadeMessage {
+  action: string
+  success: boolean
+  message?: string
+  publicState: any
+  privateState: any
+  seat: string
+  playerId: string
+  lastAction: {
+    action: string
+    bid: ServerBid
     timestamp: number
-  }>
-  contract?: string
-  declarer?: string
-  openingLeader?: string
+    nextTurn: string
+  }
 }
 
-interface BidMadeMessage {
+interface CardPlayedMessage {
+  action: string
+  success: boolean
+  message?: string
+  publicState: any
+  privateState: any
+  seat: string
+  playerId: string
+  lastAction: {
+    action: string
+    card: string
+    timestamp: number
+    nextTurn: string
+  }
+}
+
+interface SeatBasedBidMadeMessage {
   action: string
   success: boolean
   bid: ServerBid
   nextTurn: string
-  gameData: ServerGameData
-  roomState: string
-  updateType: string
+  publicState: any
+  privateState: any
+  seat: string
+  playerId: string
+  lastAction: any
   message: string
 }
 
-interface RoomStartedMessage {
-  action: string
-  success: boolean
-  room: {
-    roomId: string
-    ownerId: string
-    playerName: string
-    roomName: string
-    isPrivate: boolean
-    seats: Record<string, string>
-    state: string
-  }
-  gameData: ServerGameData
-  gameState?: any // Optional gameState property
-  updateType: string
-  message: string
-  hands?: Record<string, string[]>
-}
-
-interface CardPlayedMessage {
+interface SeatBasedCardPlayedMessage {
   action: string
   success: boolean
   play: {
@@ -76,46 +75,29 @@ interface CardPlayedMessage {
     timestamp: number
   }
   nextTurn: string
-  gameData: ServerGameData
-  roomState: string
-  updateType: string
-  trickCompleted: boolean
+  publicState: any
+  privateState: any
+  seat: string
+  playerId: string
+  lastAction: any
   message: string
 }
 
-interface GameStateUpdateMessage {
+interface SeatBasedGameStateUpdateMessage {
   action: string
   success: boolean
-  gameData: ServerGameData
+  publicState: any
+  privateState: any
+  seat: string
+  playerId: string
+  lastAction: any
   message: string
 }
-
-interface BidUpdateMessage {
-  action: string
-  success: boolean
-  gameData: ServerGameData
-  message: string
-}
-
-interface GameStartedMessage {
-  action: string
-  success: boolean
-  gameData: ServerGameData
-  message: string
-}
-
-interface GameCompletedMessage {
-  action: string
-  success: boolean
-  gameData: ServerGameData
-  message: string
-}
-
-
 
 export function useWebSocketMessages(roomId: string | undefined) {
-  const { updateCurrentRoom } = useRoomDataStore()
-  const { gameData, setAiThinking } = useGameStore()
+  const { updateCurrentRoom, currentRoom } = useRoomDataStore()
+  const { gameData, setAiThinking, updateGameData } = useGameStore()
+  const { userId } = useUserStore()
 
   // Add global error handler to catch length errors
   useEffect(() => {
@@ -134,6 +116,108 @@ export function useWebSocketMessages(roomId: string | undefined) {
     if (!roomId) {
       console.log('useWebSocketMessages - no roomId, skipping handler registration')
       return
+    }
+
+    // Helper function to get current player position
+    const getCurrentPlayerPosition = (): Position => {
+      const { currentRoom } = useRoomDataStore.getState()
+      if (!currentRoom || !userId) return 'North'
+      
+      const seatMapping: Record<string, Position> = { N: 'North', S: 'South', E: 'East', W: 'West' }
+      for (const [seatKey, playerId] of Object.entries(currentRoom.seats)) {
+        if (playerId === userId) {
+          return seatMapping[seatKey] || 'North'
+        }
+      }
+      return 'North'
+    }
+
+    // New seat-based message handlers
+    const handleSeatBasedGameStateUpdate = (data: SeatBasedGameStateUpdateMessage) => {
+      console.log('Received seat-based game state update:', data)
+      
+      if (data.publicState && data.privateState) {
+        const response: SeatBasedGameResponse = {
+          publicState: data.publicState,
+          privateState: data.privateState,
+          seat: data.seat,
+          playerId: data.playerId,
+          lastAction: data.lastAction,
+          message: data.message
+        }
+        
+        const currentPlayerPosition = getCurrentPlayerPosition()
+        const { currentRoom } = useRoomDataStore.getState()
+        
+        if (currentRoom) {
+          const convertedGameData = convertSeatBasedResponseToGameData(
+            response,
+            currentRoom.seats,
+            currentPlayerPosition
+          )
+          
+          updateGameData(convertedGameData)
+          setAiThinking(false)
+        }
+      }
+    }
+
+    const handleSeatBasedBidMade = (data: SeatBasedBidMadeMessage) => {
+      console.log('Received seat-based bid made:', data)
+      
+      if (data.publicState && data.privateState) {
+        const response: SeatBasedGameResponse = {
+          publicState: data.publicState,
+          privateState: data.privateState,
+          seat: data.seat,
+          playerId: data.playerId,
+          lastAction: data.lastAction,
+          message: data.message
+        }
+        
+        const currentPlayerPosition = getCurrentPlayerPosition()
+        const { currentRoom } = useRoomDataStore.getState()
+        
+        if (currentRoom) {
+          const convertedGameData = convertSeatBasedResponseToGameData(
+            response,
+            currentRoom.seats,
+            currentPlayerPosition
+          )
+          
+          updateGameData(convertedGameData)
+          setAiThinking(false)
+        }
+      }
+    }
+
+    const handleSeatBasedCardPlayed = (data: SeatBasedCardPlayedMessage) => {
+      console.log('Received seat-based card played:', data)
+      
+      if (data.publicState && data.privateState) {
+        const response: SeatBasedGameResponse = {
+          publicState: data.publicState,
+          privateState: data.privateState,
+          seat: data.seat,
+          playerId: data.playerId,
+          lastAction: data.lastAction,
+          message: data.message
+        }
+        
+        const currentPlayerPosition = getCurrentPlayerPosition()
+        const { currentRoom } = useRoomDataStore.getState()
+        
+        if (currentRoom) {
+          const convertedGameData = convertSeatBasedResponseToGameData(
+            response,
+            currentRoom.seats,
+            currentPlayerPosition
+          )
+          
+          updateGameData(convertedGameData)
+          setAiThinking(false)
+        }
+      }
     }
 
     // Room update handlers
@@ -198,432 +282,80 @@ export function useWebSocketMessages(roomId: string | undefined) {
       }
     }
 
-    // Game state update handlers
-    const handleGameStateUpdate = (data: GameStateUpdateMessage) => {
-      if (data.gameData) {
-        // Convert ServerGameData to GameData format
-        const convertedGameData = {
-          ...data.gameData,
-          // Add missing GameData properties with defaults
-          dealer: "North" as Position,
-          previousTrick: null,
-          dummy: null,
-          firstCardPlayed: false,
-          gameNumber: 1,
-          vulnerability: { NS: false, EW: false }
-        } as any
-        
-        // Update the game data in the store
-        useGameStore.getState().updateGameData(convertedGameData)
-        
-        // Clear AI thinking state if game data was updated externally
-        setAiThinking(false)
-      }
-    }
-
-    const handleBidUpdate = (data: BidUpdateMessage) => {
-      if (data.gameData) {
-        // Convert ServerGameData to GameData format
-        const convertedGameData = {
-          ...data.gameData,
-          // Add missing GameData properties with defaults
-          dealer: "North" as Position,
-          previousTrick: null,
-          dummy: null,
-          firstCardPlayed: false,
-          gameNumber: 1,
-          vulnerability: { NS: false, EW: false }
-        } as any
-        
-        useGameStore.getState().updateGameData(convertedGameData)
-        setAiThinking(false)
-      }
-    }
-
+    // Legacy game state update handlers (for backward compatibility)
     const handleBidMade = (data: BidMadeMessage) => {
+      console.log('Received bid made message:', data)
       
-      // Handle the bid data if provided
-      if (data.bid) {
-        const bid = data.bid
-        console.log('Processing bid:', bid)
-        
-        // Convert seat from server format (E) to frontend format (East)
-        const seatMap = getServerToFrontendPositionMap()
-        const frontendSeat = seatMap[bid.seat] || bid.seat
-        
-        // Convert bid string (4H) to bid object
-        let bidType: string = 'Pass'
-        let level: number | undefined
-        let suit: string | undefined
-        
-        if (bid.bid === 'pass') {
-          bidType = 'Pass'
-        } else if (bid.bid === 'double') {
-          bidType = 'Double'
-        } else if (bid.bid === 'redouble') {
-          bidType = 'Redouble'
-        } else {
-          // Parse bid like "4H" -> level: 4, suit: "♥"
-          const match = bid.bid.match(/^(\d+)([CDHSNT]+)$/)
-          if (match) {
-            level = parseInt(match[1])
-            const suitChar = match[2]
-            const suitMap: Record<string, string> = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' }
-            suit = suitMap[suitChar] || suitChar
-            bidType = 'Bid'
-          }
+      // Handle seat-based format (new format)
+      if (data.publicState && data.privateState) {
+        console.log('Processing seat-based bid made format')
+        const response: SeatBasedGameResponse = {
+          publicState: data.publicState,
+          privateState: data.privateState,
+          seat: data.seat || '',
+          playerId: data.playerId || '',
+          lastAction: data.lastAction,
+          message: data.message || ''
         }
         
-        console.log('Converted bid:', { type: bidType, level, suit, player: frontendSeat })
-      }
-      
-      // Update game state if provided
-      if (data.gameData) {
-        // Convert gameData to the expected format if needed
-        const gameData = data.gameData
+        const currentPlayerPosition = getCurrentPlayerPosition()
+        const { currentRoom } = useRoomDataStore.getState()
         
-        // Ensure hands are properly formatted for frontend
-        if (gameData.hands) {
-          const hands = gameData.hands
-          if (typeof hands === 'object' && !Array.isArray(hands)) {
-            // Convert from server format (N, E, S, W) to frontend format (North, East, South, West)
-            const positionMap = getServerToFrontendPositionMap()
-            const convertedHands: Record<string, any[]> = {}
-            
-            Object.entries(hands).forEach(([key, cards]) => {
-              const frontendPosition = positionMap[key as keyof typeof positionMap]
-              if (frontendPosition && Array.isArray(cards)) {
-                convertedHands[frontendPosition] = cards.map(cardString => {
-                  // Handle "10" cards correctly. These cards start with T
-                  let rank: string
-                  let suitChar: string
-                  
-                  if (cardString.startsWith('T')) {
-                    rank = '10'
-                    suitChar = cardString.slice(1) // Take everything after "T"
-                  } else {
-                    rank = cardString.slice(0, -1)
-                    suitChar = cardString.slice(-1)
-                  }
-                  
-                  const suitMap: Record<string, string> = { D: '♦', C: '♣', H: '♥', S: '♠' }
-                  const suit = suitMap[suitChar] || suitChar
-                  const valueMap: Record<string, number> = { 'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2 }
-                  const value = valueMap[rank] || parseInt(rank)
-                  return { suit, rank, value }
-                })
-              }
-            })
-            gameData.hands = convertedHands
-          }
+        if (currentRoom) {
+          const convertedGameData = convertSeatBasedResponseToGameData(
+            response,
+            currentRoom.seats,
+            currentPlayerPosition
+          )
+          
+          console.log('Bid made - converted game data:', convertedGameData)
+          console.log('Bid made - currentPlayer after conversion:', convertedGameData.currentPlayer)
+          
+          updateGameData(convertedGameData)
+          setAiThinking(false)
         }
-        
-        // Convert currentPhase to phase if needed
-        if (gameData.currentPhase && !gameData.phase) {
-          console.log('Bid made - setting phase from currentPhase:', gameData.currentPhase)
-          // Don't set phase to completed during bidding
-          if (gameData.currentPhase === 'completed') {
-            console.log('Bid made - preventing phase from being set to completed during bidding')
-            gameData.phase = 'bidding'
-          } else {
-            gameData.phase = gameData.currentPhase
-          }
-        }
-        
-        // Ensure phase is not incorrectly set to "completed" during bidding
-        if (data.roomState === "bidding" && gameData.phase === "completed") {
-          console.log('Bid made - fixing incorrect phase from completed to bidding')
-          gameData.phase = "bidding"
-        }
-                
-        // Convert turn to currentPlayer if needed
-        if (data.nextTurn && !gameData.currentPlayer) {
-          // Convert user ID to position by checking which position this user is assigned to
-          const { currentRoom } = useRoomDataStore.getState()
-          if (currentRoom) {
-            // Find which seat this user is assigned to
-            const seatMapping = getServerToFrontendPositionMap()
-            for (const [seatKey, playerId] of Object.entries(currentRoom.seats)) {
-              if (playerId && data.nextTurn === playerId) {
-                gameData.currentPlayer = seatMapping[seatKey] || 'North'
-                break
-              }
-            }
-          }
-        }
-        
-        // Ensure currentPlayer is set correctly - prioritize gameData.currentPlayer if available
-        if (gameData.currentPlayer) {
-          console.log('Bid made - using gameData.currentPlayer:', gameData.currentPlayer)
-        } else if (data.nextTurn) {
-          // Fallback: use nextTurn to determine current player
-          const { currentRoom } = useRoomDataStore.getState()
-          if (currentRoom) {
-            const seatMapping = getServerToFrontendPositionMap()
-            for (const [seatKey, playerId] of Object.entries(currentRoom.seats)) {
-              if (playerId && data.nextTurn === playerId) {
-                gameData.currentPlayer = seatMapping[seatKey] || 'North'
-                console.log('Bid made - fallback: converted nextTurn to currentPlayer:', data.nextTurn, '->', gameData.currentPlayer)
-                break
-              }
-            }
-          }
-        }
-        
-        console.log('Bid made - final currentPlayer before updateGameState:', gameData.currentPlayer)
-        
-        // Convert server bids to frontend bid format
-        let convertedBids: any[] = []
-        if (gameData.bids && Array.isArray(gameData.bids)) {
-          convertedBids = gameData.bids.map((serverBid: ServerBid) => {
-            // Convert seat from server format (E) to frontend format (East)
-            const seatMap = getServerToFrontendPositionMap()
-            const frontendSeat = seatMap[serverBid.seat] || 'North'
-            
-            // Convert bid string (4H) to bid object
-            let bidType: 'Pass' | 'Double' | 'Redouble' | 'Bid' = 'Pass'
-            let level: number | undefined
-            let suit: string | undefined
-            
-            if (serverBid.bid === 'pass') {
-              bidType = 'Pass'
-            } else if (serverBid.bid === 'double') {
-              bidType = 'Double'
-            } else if (serverBid.bid === 'redouble') {
-              bidType = 'Redouble'
-            } else {
-              // Parse bid like "4H" -> level: 4, suit: "♥"
-              const match = serverBid.bid.match(/^(\d+)([CDHSNT]+)$/)
-              if (match) {
-                level = parseInt(match[1])
-                const suitChar = match[2]
-                const suitMap: Record<string, string> = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' }
-                suit = suitMap[suitChar] || suitChar
-                bidType = 'Bid'
-              }
-            }
-            
-            return {
-              type: bidType,
-              level: bidType === 'Bid' ? level : bidType,
-              suit: bidType === 'Bid' ? suit : undefined,
-              player: frontendSeat
-            }
-          })
-        }
-        
-        // Convert ServerGameData to GameData format
-        const convertedGameData = {
-          ...gameData,
-          bids: convertedBids, // Use converted bids instead of server bids
-          // Add missing GameData properties with defaults
-          dealer: "North" as Position,
-          previousTrick: null,
-          contract: null,
-          dummy: null,
-          firstCardPlayed: false,
-          gameNumber: 1,
-          vulnerability: { NS: false, EW: false }
-        } as any // Type assertion since we know the structure will be correct
-        
-        // Final safety check: if we're receiving a bidMade message, we should not be in completed phase
-        if (convertedGameData.phase === "completed") {
-          console.log('Bid made - final safety check: correcting phase from completed to bidding')
-          convertedGameData.phase = "bidding"
-        }
-        
-        useGameStore.getState().updateGameData(convertedGameData)
-        console.log('Bid made - final game state after update:', useGameStore.getState().gameData)
-        console.log('Bid made - final currentPlayer:', useGameStore.getState().gameData.currentPlayer)
-        setAiThinking(false)
+      } else {
+        console.warn('Bid made message missing required seat-based fields:', data)
       }
     }
 
     const handleCardPlayed = (data: CardPlayedMessage) => {
       console.log('Received card played update:', data)
       
-      // Handle gameData if provided (server format)
-      if (data.gameData) {
-        console.log('Card played - processing gameData:', data.gameData)
-        
-        // Convert gameData to the expected format
-        const gameData = data.gameData
-        
-        // Ensure hands are properly formatted for frontend
-        if (gameData.hands) {
-          const hands = gameData.hands
-          if (typeof hands === 'object' && !Array.isArray(hands)) {
-            // Convert from server format (N, E, S, W) to frontend format (North, East, South, West)
-            const positionMap = getServerToFrontendPositionMap()
-            const convertedHands: Record<string, any[]> = {}
-            
-            Object.entries(hands).forEach(([key, cards]) => {
-              const frontendPosition = positionMap[key as keyof typeof positionMap]
-              if (frontendPosition && Array.isArray(cards)) {
-                convertedHands[frontendPosition] = cards.map(cardString => {
-                  // Handle "10" cards correctly. These cards start with T
-                  let rank: string
-                  let suitChar: string
-                  
-                  if (cardString.startsWith('T')) {
-                    rank = '10'
-                    suitChar = cardString.slice(1) // Take everything after "T"
-                  } else {
-                    rank = cardString.slice(0, -1)
-                    suitChar = cardString.slice(-1)
-                  }
-                  
-                  const suitMap: Record<string, string> = { D: '♦', C: '♣', H: '♥', S: '♠' }
-                  const suit = suitMap[suitChar] || suitChar
-                  const valueMap: Record<string, number> = { 'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2 }
-                  const value = valueMap[rank] || parseInt(rank)
-                  return { suit, rank, value }
-                })
-              }
-            })
-            gameData.hands = convertedHands
-          }
+      // Handle seat-based format (new format)
+      if (data.publicState && data.privateState) {
+        console.log('Processing seat-based card played format')
+        const response: SeatBasedGameResponse = {
+          publicState: data.publicState,
+          privateState: data.privateState,
+          seat: data.seat || '',
+          playerId: data.playerId || '',
+          lastAction: data.lastAction,
+          message: data.message || ''
         }
         
-        // Convert currentPhase to phase if needed
-        if (gameData.currentPhase && !gameData.phase) {
-          gameData.phase = gameData.currentPhase
-        }
+        const currentPlayerPosition = getCurrentPlayerPosition()
+        const { currentRoom } = useRoomDataStore.getState()
         
-        // Use data.nextTurn to determine current player (this is what the server actually sends)
-        if (data.nextTurn && !gameData.currentPlayer) {
-          // Convert user ID to position by checking which position this user is assigned to
-          const { currentRoom } = useRoomDataStore.getState()
-          if (currentRoom) {
-            // Find which seat this user is assigned to
-            const seatMapping = getServerToFrontendPositionMap()
-            for (const [seatKey, playerId] of Object.entries(currentRoom.seats)) {
-              if (playerId && data.nextTurn === playerId) {
-                gameData.currentPlayer = seatMapping[seatKey] || 'North'
-                console.log('Card played - converted nextTurn to currentPlayer:', data.nextTurn, '->', gameData.currentPlayer)
-                break
-              }
-            }
-          }
-        }
-        
-        // Convert currentTrick from array format to object format
-        if (gameData.currentTrick && Array.isArray(gameData.currentTrick)) {
-          // Convert array format to object format
-          const trickArray = gameData.currentTrick
-          const convertedTrick: any = {
-            cards: getEmptyPositionObject(null),
-            winner: null,
-            ledSuit: null,
-            trickLeader: null
-          }
+        if (currentRoom) {
+          const convertedGameData = convertSeatBasedResponseToGameData(
+            response,
+            currentRoom.seats,
+            currentPlayerPosition
+          )
           
-          // Process the trick array to extract cards and determine ledSuit
-          if (trickArray.length > 0) {
-            // Find the first card played to determine ledSuit and trickLeader
-            const firstCard = trickArray[0]
-            if (firstCard && firstCard.seat && firstCard.card) {
-              const seatMapping = getServerToFrontendPositionMap()
-              const frontendSeat = seatMapping[firstCard.seat] || 'North'
-              convertedTrick.trickLeader = frontendSeat
-              
-              // Extract suit from card (e.g., "AH" -> "♥")
-              const cardString = firstCard.card
-              let suit: string
-              if (cardString.endsWith('H')) suit = '♥'
-              else if (cardString.endsWith('S')) suit = '♠'
-              else if (cardString.endsWith('D')) suit = '♦'
-              else if (cardString.endsWith('C')) suit = '♣'
-              else suit = 'NT'
-              
-              convertedTrick.ledSuit = suit
-              
-              // Convert all cards in the trick
-              trickArray.forEach((trickCard: any) => {
-                if (trickCard.seat && trickCard.card) {
-                  const frontendSeat = seatMapping[trickCard.seat] || 'North'
-                  
-                  // Convert card string to card object
-                  const cardString = trickCard.card
-                  let rank: string
-                  let suitChar: string
-                  
-                  if (cardString.startsWith('T')) {
-                    rank = '10'
-                    suitChar = cardString.slice(1) // Take everything after "T"
-                  } else {
-                    rank = cardString.slice(0, -1)
-                    suitChar = cardString.slice(-1)
-                  }
-                  
-                  const suitMap: Record<string, string> = { D: '♦', C: '♣', H: '♥', S: '♠' }
-                  const suit = suitMap[suitChar] || suitChar
-                  const valueMap: Record<string, number> = { 'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2 }
-                  const value = valueMap[rank] || parseInt(rank)
-                  
-                  convertedTrick.cards[frontendSeat as keyof typeof convertedTrick.cards] = { suit, rank, value }
-                }
-              })
-            }
-          }
+          console.log('Card played - converted game data:', convertedGameData)
+          console.log('Card played - currentPlayer after conversion:', convertedGameData.currentPlayer)
           
-          gameData.currentTrick = convertedTrick
+          updateGameData(convertedGameData)
+          setAiThinking(false)
         }
-        
-        // Convert contract from string to object format
-        if (gameData.contract && typeof gameData.contract === 'string') {
-          const contractString = gameData.contract
-          const match = contractString.match(/^(\d+)([CDHSNT]+)$/)
-          if (match) {
-            const level = parseInt(match[1])
-            const suitChar = match[2]
-            const suitMap: Record<string, string> = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' }
-            const suit = suitMap[suitChar] || suitChar
-            
-            const seatMapping = getServerToFrontendPositionMap()
-            // Store the converted contract in a separate variable to avoid type conflicts
-            const convertedContract = {
-              level,
-              suit,
-              declarer: gameData.declarer ? seatMapping[gameData.declarer] || 'North' : 'North',
-              doubled: false,
-              redoubled: false
-            }
-            // We'll use this in the final convertedGameData
-          }
-        }
-        
-        // Convert declarer and openingLeader to frontend format
-        if (gameData.declarer) {
-          const seatMapping = getServerToFrontendPositionMap()
-          gameData.declarer = seatMapping[gameData.declarer] || 'North'
-        }
-        
-        if (gameData.openingLeader) {
-          const seatMapping = getServerToFrontendPositionMap()
-          gameData.openingLeader = seatMapping[gameData.openingLeader] || 'North'
-        }
-        
-        // Convert ServerGameData to GameData format
-        const convertedGameData = {
-          ...gameData,
-          // Add missing GameData properties with defaults
-          dealer: "North" as Position,
-          previousTrick: null,
-          contract: null,
-          dummy: null,
-          firstCardPlayed: true, // Since a card was just played
-          gameNumber: 1,
-          vulnerability: { NS: false, EW: false }
-        } as any // Type assertion since we know the structure will be correct
-        
-        console.log('Card played - converted game state:', convertedGameData)
-        useGameStore.getState().updateGameData(convertedGameData)
-        setAiThinking(false)
+      } else {
+        console.warn('Card played message missing required seat-based fields:', data)
       }
     }
 
-    const handleGameStarted = (data: GameStartedMessage) => {
+    const handleGameStarted = (data: any) => {
       console.log('Game started:', data)
       if (data.gameData) {
         // Convert ServerGameData to GameData format
@@ -643,7 +375,7 @@ export function useWebSocketMessages(roomId: string | undefined) {
       }
     }
 
-    const handleGameCompleted = (data: GameCompletedMessage) => {
+    const handleGameCompleted = (data: any) => {
       console.log('Game completed:', data)
       if (data.gameData) {
         // Convert ServerGameData to GameData format
@@ -663,7 +395,7 @@ export function useWebSocketMessages(roomId: string | undefined) {
       }
     }
 
-    const handleStartRoom = (data: RoomStartedMessage) => {
+    const handleStartRoom = (data: any) => {
       
       // Update room data if provided
       if (data.room) {
@@ -811,14 +543,16 @@ export function useWebSocketMessages(roomId: string | undefined) {
     websocketService.onMessage(WebSocketActions.PLAYER_LEFT, handlePlayerLeft)
     websocketService.onMessage(WebSocketActions.ROOM_STARTED, handleStartRoom)
 
+    // New seat-based handlers
+    websocketService.onMessage(WebSocketActions.SEAT_BASED_GAME_STATE_UPDATE, handleSeatBasedGameStateUpdate)
+    websocketService.onMessage(WebSocketActions.SEAT_BASED_BID_MADE, handleSeatBasedBidMade)
+    websocketService.onMessage(WebSocketActions.SEAT_BASED_CARD_PLAYED, handleSeatBasedCardPlayed)
     
-    // Game state handlers
-    websocketService.onMessage(WebSocketActions.GAME_STATE_UPDATE, handleGameStateUpdate)
-    websocketService.onMessage(WebSocketActions.BID_UPDATE, handleBidUpdate)
-    websocketService.onMessage(WebSocketActions.BID_MADE, handleBidMade) // Added handleBidMade
-    websocketService.onMessage(WebSocketActions.CARD_PLAYED, handleCardPlayed)
+    // Legacy game state handlers (for backward compatibility)
     websocketService.onMessage(WebSocketActions.GAME_STARTED, handleGameStarted)
     websocketService.onMessage(WebSocketActions.GAME_COMPLETED, handleGameCompleted)
+    websocketService.onMessage(WebSocketActions.BID_MADE, handleBidMade)
+    websocketService.onMessage(WebSocketActions.CARD_PLAYED, handleCardPlayed)
 
     // Cleanup function
     return () => {
@@ -826,12 +560,17 @@ export function useWebSocketMessages(roomId: string | undefined) {
       websocketService.offMessage(WebSocketActions.PLAYER_JOINED)
       websocketService.offMessage(WebSocketActions.PLAYER_LEFT)
       websocketService.offMessage(WebSocketActions.ROOM_STARTED)
-      websocketService.offMessage(WebSocketActions.GAME_STATE_UPDATE)
-      websocketService.offMessage(WebSocketActions.BID_UPDATE)
-      websocketService.offMessage(WebSocketActions.BID_MADE) // Added offMessage for handleBidMade
-      websocketService.offMessage(WebSocketActions.CARD_PLAYED)
+      
+      // New seat-based handlers
+      websocketService.offMessage(WebSocketActions.SEAT_BASED_GAME_STATE_UPDATE)
+      websocketService.offMessage(WebSocketActions.SEAT_BASED_BID_MADE)
+      websocketService.offMessage(WebSocketActions.SEAT_BASED_CARD_PLAYED)
+      
+      // Legacy handlers
       websocketService.offMessage(WebSocketActions.GAME_STARTED)
       websocketService.offMessage(WebSocketActions.GAME_COMPLETED)
+      websocketService.offMessage(WebSocketActions.BID_MADE)
+      websocketService.offMessage(WebSocketActions.CARD_PLAYED)
     }
-  }, [roomId, updateCurrentRoom, setAiThinking])
+  }, [roomId, updateCurrentRoom, setAiThinking, updateGameData, userId])
 }
