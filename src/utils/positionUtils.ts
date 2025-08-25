@@ -196,14 +196,18 @@ export function getPlayingOrderFromLeader(leader: Position): Position[] {
 
 /**
  * Get the mapping from server position format (N, E, S, W) to frontend format (North, East, South, West)
+ * Note: Server now returns full position names, so this mapping is mainly for backward compatibility
  * Derived from the relativePositions map
  */
 export function getServerToFrontendPositionMap(): Record<string, Position> {
-  return { N: 'North', E: 'East', S: 'South', W: 'West' }
+  return { 
+    N: 'North', E: 'East', S: 'South', W: 'West'
+  }
 }
 
 /**
  * Get the mapping from frontend position format (North, East, South, West) to server format (N, E, S, W)
+ * Note: Server now accepts full position names, so this mapping is mainly for backward compatibility
  * Derived from the relativePositions map
  */
 export function getFrontendToServerPositionMap(): Record<Position, string> {

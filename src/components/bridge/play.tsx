@@ -28,13 +28,11 @@ export default function BridgeGame() {
     isMyTurn,
     canMakeMove
   } = useGameStore()
-  const { getNorthPlayerName, getWestPlayerName, getEastPlayerName, getPlayerName, getPlayerDisplayName, getCurrentPlayerPosition, isRobot, getDisplayPositionLabel } = useRoomDataStore()
+  const { getNorthPlayerName, getWestPlayerName, getEastPlayerName, getPlayerDisplayName, isRobot } = useRoomDataStore()
+  const { getCurrentPlayerPosition } = useGameStore()
 
   // Handle AI turns automatically
   useAITurn()
-
-  // Memoize the turn check to prevent excessive function calls
-  const isMyTurnResult = useMemo(() => isMyTurn(), [isMyTurn])
 
   const handleBackToRoom = () => {
     navigate('/')
@@ -48,12 +46,6 @@ export default function BridgeGame() {
     }
   }
 
-  // Calculate display position labels once for each direction
-  const westDisplayLabel = getDisplayPositionLabel("West")
-  const northDisplayLabel = getDisplayPositionLabel("North")
-  const southDisplayLabel = getDisplayPositionLabel("South")
-  const eastDisplayLabel = getDisplayPositionLabel("East")
-
   // Get the current player's position once
   const currentPlayerPosition = getCurrentPlayerPosition()
 
@@ -64,7 +56,6 @@ export default function BridgeGame() {
     // Get the actual game position for this display position using subtractPositions
     const gamePosition: Position = subtractPositions(currentPlayerPosition, displayPosition)
     
-    
     // Check if cards should be shown
     const showCards = isCurrentPlayer || 
       (gameData.phase === "playing" && gameData.dummy === gamePosition && gameData.firstCardPlayed)
@@ -73,7 +64,17 @@ export default function BridgeGame() {
     const isDummy = gameData.phase === "playing" && gameData.dummy === gamePosition
     
     // Check if current player should control this hand using new seat-based logic
-    const shouldCurrentPlayerControl = isCurrentPlayer && isMyTurnResult && canMakeMove()
+    const canMoveResult = canMakeMove()
+    const shouldCurrentPlayerControl = isCurrentPlayer && isMyTurn() && canMoveResult
+    
+    console.log('PlayerHand render:', {
+      displayPosition,
+      isCurrentPlayer,
+      isMyTurnResult: isMyTurn(),
+      canMoveResult,
+      shouldCurrentPlayerControl,
+      phase: gameData.phase
+    })
     
     // For East/West dummy hands, use column display
     const displayAsDummy = isDummy && (displayPosition === "East" || displayPosition === "West")
@@ -99,6 +100,17 @@ export default function BridgeGame() {
   }
 
   const getPlayerColor = (seat: string) => {
+    // Server now returns full position names, so we can use the seat directly
+    if (seat === 'North' || seat === 'South' || seat === 'East' || seat === 'West') {
+      const colors: Record<string, string> = {
+        "North": "from-blue-500 to-blue-600",
+        "South": "from-emerald-500 to-emerald-600",
+        "East": "from-pink-500 to-pink-600",
+        "West": "from-purple-500 to-purple-600"
+      }
+      return colors[seat] || "from-gray-500 to-gray-600"
+    }
+    // Fallback for any abbreviated format
     const colors: Record<string, string> = {
       "N": "from-blue-500 to-blue-600",
       "S": "from-emerald-500 to-emerald-600",
@@ -139,14 +151,14 @@ export default function BridgeGame() {
             <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg">
               <div className="flex items-center gap-2">
                 {(() => {
-                  const playerName = getNorthPlayerName();
-                  return playerName ? (
+                  const northPlayerName = getNorthPlayerName(currentPlayerPosition);
+                  return northPlayerName ? (
                     <>
                       <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("N")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                        {isRobot(String(playerName)) ? "🤖" : subtractPositions("North", currentPlayerPosition).charAt(0)}
+                        {isRobot(String(northPlayerName)) ? "🤖" : subtractPositions("North", currentPlayerPosition).charAt(0)}
                       </div>
                       <span className="font-semibold text-gray-800">
-                        {playerName}
+                        {northPlayerName}
                       </span>
                     </>
                   ) : (
@@ -179,14 +191,14 @@ export default function BridgeGame() {
             <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg rotate-90">
               <div className="flex items-center gap-2">
                 {(() => {
-                  const playerName = getWestPlayerName();
-                  return playerName ? (
+                  const westPlayerName = getWestPlayerName(currentPlayerPosition);
+                  return westPlayerName ? (
                     <>
                       <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("W")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                        {isRobot(String(playerName)) ? "🤖" : subtractPositions("West", currentPlayerPosition).charAt(0)}
+                        {isRobot(String(westPlayerName)) ? "🤖" : subtractPositions("West", currentPlayerPosition).charAt(0)}
                       </div>
                       <span className="font-semibold text-gray-800">
-                        {playerName}
+                        {westPlayerName}
                       </span>
                     </>
                   ) : (
@@ -210,14 +222,14 @@ export default function BridgeGame() {
             <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg -rotate-90">
               <div className="flex items-center gap-2">
                 {(() => {
-                  const playerName = getEastPlayerName();
-                  return playerName ? (
+                  const eastPlayerName = getEastPlayerName(currentPlayerPosition);
+                  return eastPlayerName ? (
                     <>
                       <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("E")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                        {isRobot(String(playerName)) ? "🤖" : subtractPositions("East", currentPlayerPosition).charAt(0)}
+                        {isRobot(String(eastPlayerName)) ? "🤖" : subtractPositions("East", currentPlayerPosition).charAt(0)}
                       </div>
                       <span className="font-semibold text-gray-800">
-                        {playerName}
+                        {eastPlayerName}
                       </span>
                     </>
                   ) : (
@@ -254,7 +266,7 @@ export default function BridgeGame() {
                   return playerName ? (
                     <>
                       <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("S")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                        {subtractPositions("South", currentPlayerPosition).charAt(0)}
+                        {currentPlayerPosition.charAt(0)}
                       </div>
                       <span className="font-semibold text-gray-800">
                         {playerName}
@@ -285,14 +297,14 @@ export default function BridgeGame() {
             {gameData.phase === "playing" && (
               <div className="mb-4 text-center">
                 <div className={`inline-block px-6 py-3 rounded-xl shadow-lg border-2 ${
-                  isMyTurnResult 
+                  isMyTurn() 
                     ? 'bg-green-600 text-white border-green-500' 
                     : 'bg-gray-400 text-gray-200 border-gray-300'
                 }`}>
                   <span className="font-semibold text-lg">🎯 It's </span>
                   <span className="font-bold text-2xl text-yellow-300">{gameData.currentPlayer}'s</span>
                   <span className="font-semibold text-lg"> turn to play!</span>
-                  {isMyTurnResult && (
+                  {isMyTurn() && (
                     <div className="text-sm mt-1 text-yellow-200">
                       It's your turn!
                     </div>
@@ -305,14 +317,14 @@ export default function BridgeGame() {
             {gameData.phase === "bidding" && (
               <div className="mb-4 text-center">
                 <div className={`inline-block px-6 py-3 rounded-xl shadow-lg border-2 ${
-                  isMyTurnResult 
+                  isMyTurn() 
                     ? 'bg-blue-600 text-white border-blue-500' 
                     : 'bg-gray-400 text-gray-200 border-gray-300'
                 }`}>
                   <span className="font-semibold text-lg">🎯 It's </span>
                   <span className="font-bold text-2xl text-yellow-300">{gameData.currentPlayer}'s</span>
                   <span className="font-semibold text-lg"> turn to bid!</span>
-                  {isMyTurnResult && (
+                  {isMyTurn() && (
                     <div className="text-sm mt-1 text-yellow-200">
                       It's your turn!
                     </div>
@@ -329,7 +341,7 @@ export default function BridgeGame() {
             )}
             {gameData.phase === "completed" && (
               <GameCompleted
-                gameState={gameData}
+              gameData={gameData}
                 onNewGame={startNewGame}
                 onBackToRoom={handleBackToRoom}
               />

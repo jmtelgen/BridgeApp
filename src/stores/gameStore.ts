@@ -86,6 +86,7 @@ interface GameStore {
   gameData: GameData
   selectedCard: PlayingCard | null
   aiThinking: boolean
+  currentPlayerPosition: Position // Track which seat the current player is in
   
   // Actions
   setSelectedCard: (card: PlayingCard | null) => void
@@ -94,6 +95,9 @@ interface GameStore {
   makeBid: (type: BidType, level?: number, suit?: Suit | "NT") => void
   playCard: (card: PlayingCard) => void
   setAiThinking: (thinking: boolean) => void
+  setCurrentPlayerPosition: (position: Position) => void
+  detectAndSetCurrentPlayerPosition: (seats: Record<string, string>, userId: string) => Position | null
+  getCurrentPlayerPosition: () => Position
   
   // AI Actions
   handleAITurn: () => Promise<void>
@@ -108,6 +112,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   gameData: initializeGame(),
   selectedCard: null,
   aiThinking: false,
+  currentPlayerPosition: "North", // Default to North
   
 
 
@@ -125,7 +130,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       gameData: initializeGame(),
       selectedCard: null,
-      aiThinking: false
+      aiThinking: false,
+      currentPlayerPosition: "North" // Reset to North for new game
     })
   },
 
@@ -292,26 +298,32 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // New methods for seat-based logic
   isMyTurn: () => {
-    const { gameData } = get()
-    const { getCurrentPlayerPosition } = useRoomDataStore.getState()
-    const currentPlayerPosition = getCurrentPlayerPosition()
+    const { gameData, currentPlayerPosition } = get()
     
     // Check if it's the current player's turn
     const isTurn = gameData.currentPlayer === currentPlayerPosition
+    
     console.log('isMyTurn check:', {
       currentPlayerPosition,
       gameDataCurrentPlayer: gameData.currentPlayer,
       isTurn
     })
+    
     return isTurn
   },
 
   canMakeMove: () => {
-    const { gameData } = get()
-    const { getCurrentPlayerPosition } = useRoomDataStore.getState()
-    const currentPlayerPosition = getCurrentPlayerPosition()
+    const { gameData, currentPlayerPosition } = get()
     
-    // Check if it's the current player's turn and they have a hand
+    console.log('canMakeMove: checking move', {
+      currentPlayerPosition,
+      gameDataCurrentPlayer: gameData.currentPlayer,
+      gameDataPhase: gameData.phase,
+      currentHand: gameData.hands[currentPlayerPosition],
+      currentTrick: gameData.currentTrick
+    })
+    
+    // Check if it's the current player's turn
     if (gameData.currentPlayer !== currentPlayerPosition) {
       console.log('canMakeMove: not current player turn', {
         currentPlayerPosition,
@@ -320,35 +332,67 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return false
     }
     
+    // Check if we have a hand to play
     const currentHand = gameData.hands[currentPlayerPosition]
     if (!currentHand || currentHand.length === 0) {
       console.log('canMakeMove: no hand available', {
         currentPlayerPosition,
-        handLength: currentHand?.length
+        currentHand
       })
       return false
     }
     
-    // For playing phase, check if there are valid cards to play
-    if (gameData.phase === "playing") {
-      const validCards = currentHand.filter((card: PlayingCard) => 
-        canPlayCard(card, currentHand, gameData.currentTrick?.ledSuit || null)
-      )
-      const canMove = validCards.length > 0
-      console.log('canMakeMove: playing phase', {
-        currentPlayerPosition,
-        handLength: currentHand.length,
-        validCardsLength: validCards.length,
-        canMove
-      })
-      return canMove
+    // For bidding phase, always allow moves
+    if (gameData.phase === "bidding") {
+      return true
     }
     
-    // For bidding phase, always allow moves
-    console.log('canMakeMove: bidding phase - allowing move', {
-      currentPlayerPosition,
-      handLength: currentHand.length
-    })
-    return gameData.phase === "bidding"
+    // For playing phase, check if we can play a card
+    if (gameData.phase === "playing") {
+      // Check if we have valid cards to play
+      const validCards = currentHand.filter(card => 
+        canPlayCard(card, currentHand, gameData.currentTrick?.ledSuit || null)
+      )
+      
+      console.log('canMakeMove: playing phase check', {
+        currentPlayerPosition,
+        validCardsCount: validCards.length,
+        validCards
+      })
+      
+      return validCards.length > 0
+    }
+    
+    return false
+  },
+
+  setCurrentPlayerPosition: (position: Position) => {
+    set({ currentPlayerPosition: position })
+  },
+
+  detectAndSetCurrentPlayerPosition: (seats: Record<string, string>, userId: string) => {
+    // Find which seat this user is assigned to
+    let playerPosition: Position | null = null
+    
+    for (const [seatKey, playerId] of Object.entries(seats)) {
+      if (playerId === userId) {
+        // Server now returns full position names, so we can use the seat directly
+        if (seatKey === 'North' || seatKey === 'South' || seatKey === 'East' || seatKey === 'West') {
+          playerPosition = seatKey as Position
+        }
+        break
+      }
+    }
+    
+    if (playerPosition) {
+      // Set the current player position
+      set({ currentPlayerPosition: playerPosition })
+    }
+    
+    return playerPosition
+  },
+
+  getCurrentPlayerPosition: () => {
+    return get().currentPlayerPosition
   }
 })) 

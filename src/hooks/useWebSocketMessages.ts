@@ -3,11 +3,10 @@ import { websocketService } from '../services/websocketService'
 import { useRoomDataStore } from '../stores/roomDataStore'
 import { useGameStore } from '../stores/gameStore'
 import { WebSocketActions } from '../config/websocket'
-import { Position, SeatBasedGameResponse, BroadcastMessage } from '../components/bridge/types'
+import { Position, SeatBasedGameResponse, BroadcastMessage, GameData } from '../components/bridge/types'
 import { useUserStore } from '../stores/userStore'
 import { 
   getAllPositions, 
-  getServerToFrontendPositionMap, 
   getFrontendToServerPositionMap,
   getEmptyPositionObject
 } from '../utils/positionUtils'
@@ -53,50 +52,9 @@ interface CardPlayedMessage {
   }
 }
 
-interface SeatBasedBidMadeMessage {
-  action: string
-  success: boolean
-  bid: ServerBid
-  nextTurn: string
-  publicState: any
-  privateState: any
-  seat: string
-  playerId: string
-  lastAction: any
-  message: string
-}
-
-interface SeatBasedCardPlayedMessage {
-  action: string
-  success: boolean
-  play: {
-    seat: string
-    card: string
-    timestamp: number
-  }
-  nextTurn: string
-  publicState: any
-  privateState: any
-  seat: string
-  playerId: string
-  lastAction: any
-  message: string
-}
-
-interface SeatBasedGameStateUpdateMessage {
-  action: string
-  success: boolean
-  publicState: any
-  privateState: any
-  seat: string
-  playerId: string
-  lastAction: any
-  message: string
-}
-
 export function useWebSocketMessages(roomId: string | undefined) {
-  const { updateCurrentRoom, currentRoom } = useRoomDataStore()
-  const { gameData, setAiThinking, updateGameData } = useGameStore()
+  const { updateCurrentRoom } = useRoomDataStore()
+  const { setAiThinking, updateGameData } = useGameStore()
   const { userId } = useUserStore()
 
   // Add global error handler to catch length errors
@@ -123,101 +81,20 @@ export function useWebSocketMessages(roomId: string | undefined) {
       const { currentRoom } = useRoomDataStore.getState()
       if (!currentRoom || !userId) return 'North'
       
-      const seatMapping: Record<string, Position> = { N: 'North', S: 'South', E: 'East', W: 'West' }
+      // Server now returns full position names, so we can use the seat directly
       for (const [seatKey, playerId] of Object.entries(currentRoom.seats)) {
         if (playerId === userId) {
+          if (seatKey === 'North' || seatKey === 'South' || seatKey === 'East' || seatKey === 'West') {
+            return seatKey as Position
+          }
+          // Fallback for any abbreviated format
+          const seatMapping: Record<string, Position> = { 
+            N: 'North', S: 'South', E: 'East', W: 'West'
+          }
           return seatMapping[seatKey] || 'North'
         }
       }
       return 'North'
-    }
-
-    // New seat-based message handlers
-    const handleSeatBasedGameStateUpdate = (data: SeatBasedGameStateUpdateMessage) => {
-      console.log('Received seat-based game state update:', data)
-      
-      if (data.publicState && data.privateState) {
-        const response: SeatBasedGameResponse = {
-          publicState: data.publicState,
-          privateState: data.privateState,
-          seat: data.seat,
-          playerId: data.playerId,
-          lastAction: data.lastAction,
-          message: data.message
-        }
-        
-        const currentPlayerPosition = getCurrentPlayerPosition()
-        const { currentRoom } = useRoomDataStore.getState()
-        
-        if (currentRoom) {
-          const convertedGameData = convertSeatBasedResponseToGameData(
-            response,
-            currentRoom.seats,
-            currentPlayerPosition
-          )
-          
-          updateGameData(convertedGameData)
-          setAiThinking(false)
-        }
-      }
-    }
-
-    const handleSeatBasedBidMade = (data: SeatBasedBidMadeMessage) => {
-      console.log('Received seat-based bid made:', data)
-      
-      if (data.publicState && data.privateState) {
-        const response: SeatBasedGameResponse = {
-          publicState: data.publicState,
-          privateState: data.privateState,
-          seat: data.seat,
-          playerId: data.playerId,
-          lastAction: data.lastAction,
-          message: data.message
-        }
-        
-        const currentPlayerPosition = getCurrentPlayerPosition()
-        const { currentRoom } = useRoomDataStore.getState()
-        
-        if (currentRoom) {
-          const convertedGameData = convertSeatBasedResponseToGameData(
-            response,
-            currentRoom.seats,
-            currentPlayerPosition
-          )
-          
-          updateGameData(convertedGameData)
-          setAiThinking(false)
-        }
-      }
-    }
-
-    const handleSeatBasedCardPlayed = (data: SeatBasedCardPlayedMessage) => {
-      console.log('Received seat-based card played:', data)
-      
-      if (data.publicState && data.privateState) {
-        const response: SeatBasedGameResponse = {
-          publicState: data.publicState,
-          privateState: data.privateState,
-          seat: data.seat,
-          playerId: data.playerId,
-          lastAction: data.lastAction,
-          message: data.message
-        }
-        
-        const currentPlayerPosition = getCurrentPlayerPosition()
-        const { currentRoom } = useRoomDataStore.getState()
-        
-        if (currentRoom) {
-          const convertedGameData = convertSeatBasedResponseToGameData(
-            response,
-            currentRoom.seats,
-            currentPlayerPosition
-          )
-          
-          updateGameData(convertedGameData)
-          setAiThinking(false)
-        }
-      }
     }
 
     // Room update handlers
@@ -285,6 +162,9 @@ export function useWebSocketMessages(roomId: string | undefined) {
     // Legacy game state update handlers (for backward compatibility)
     const handleBidMade = (data: BidMadeMessage) => {
       console.log('Received bid made message:', data)
+      console.log('Bid made - action:', data.action)
+      console.log('Bid made - publicState:', data.publicState)
+      console.log('Bid made - privateState:', data.privateState)
       
       // Handle seat-based format (new format)
       if (data.publicState && data.privateState) {
@@ -301,6 +181,9 @@ export function useWebSocketMessages(roomId: string | undefined) {
         const currentPlayerPosition = getCurrentPlayerPosition()
         const { currentRoom } = useRoomDataStore.getState()
         
+        console.log('Bid made - currentPlayerPosition:', currentPlayerPosition)
+        console.log('Bid made - currentRoom:', currentRoom)
+        
         if (currentRoom) {
           const convertedGameData = convertSeatBasedResponseToGameData(
             response,
@@ -310,6 +193,7 @@ export function useWebSocketMessages(roomId: string | undefined) {
           
           console.log('Bid made - converted game data:', convertedGameData)
           console.log('Bid made - currentPlayer after conversion:', convertedGameData.currentPlayer)
+          console.log('Bid made - phase:', convertedGameData.phase)
           
           updateGameData(convertedGameData)
           setAiThinking(false)
@@ -359,7 +243,7 @@ export function useWebSocketMessages(roomId: string | undefined) {
       console.log('Game started:', data)
       if (data.gameData) {
         // Convert ServerGameData to GameData format
-        const convertedGameData = {
+        const convertedGameData: GameData = {
           ...data.gameData,
           // Add missing GameData properties with defaults
           dealer: "North" as Position,
@@ -368,7 +252,7 @@ export function useWebSocketMessages(roomId: string | undefined) {
           firstCardPlayed: false,
           gameNumber: 1,
           vulnerability: { NS: false, EW: false }
-        } as any
+        }
         
         useGameStore.getState().updateGameData(convertedGameData)
         setAiThinking(false)
@@ -379,7 +263,7 @@ export function useWebSocketMessages(roomId: string | undefined) {
       console.log('Game completed:', data)
       if (data.gameData) {
         // Convert ServerGameData to GameData format
-        const convertedGameData = {
+        const convertedGameData: GameData = {
           ...data.gameData,
           // Add missing GameData properties with defaults
           dealer: "North" as Position,
@@ -388,7 +272,7 @@ export function useWebSocketMessages(roomId: string | undefined) {
           firstCardPlayed: false,
           gameNumber: 1,
           vulnerability: { NS: false, EW: false }
-        } as any
+        }
         
         useGameStore.getState().updateGameData(convertedGameData)
         setAiThinking(false)
@@ -404,27 +288,8 @@ export function useWebSocketMessages(roomId: string | undefined) {
         // Determine current player's position based on their user ID in the seats
         const { userId } = useUserStore.getState()
         if (userId && data.room.seats) {
-          
-          // Find which seat this user is assigned to
-          const seatMapping: Record<string, Position> = { N: 'North', S: 'South', E: 'East', W: 'West' }
-          let playerPosition: Position | null = null
-          
-          for (const [seatKey, playerId] of Object.entries(data.room.seats)) {
-            if (playerId === userId) {
-              playerPosition = seatMapping[seatKey] || 'North'
-              break
-            }
-          }
-          
-          if (playerPosition) {
-            // Set the current player position in the room data store
-            useRoomDataStore.getState().setCurrentPlayerPosition(playerPosition)
-            console.log('Start room - set current player position to:', playerPosition)
-          } else {
-            console.log('Start room - could not determine player position for userId:', userId)
-            console.log('Start room - available seats:', Object.keys(data.room.seats))
-            console.log('Start room - seat values:', Object.values(data.room.seats))
-          }
+          // Use the game store method to detect and set position
+          useGameStore.getState().detectAndSetCurrentPlayerPosition(data.room.seats, userId)
         } else {
           console.log('Start room - missing userId or room seats')
           console.log('Start room - userId:', userId)
@@ -448,15 +313,14 @@ export function useWebSocketMessages(roomId: string | undefined) {
           // Convert hands to the expected format if needed
           const hands = gameData.hands
           if (typeof hands === 'object' && !Array.isArray(hands)) {
-            // Convert from server format (N, E, S, W) to frontend format (North, East, South, West)
-            const positionMap = getServerToFrontendPositionMap()
+            // Server now returns full position names, so we can use the keys directly
             const convertedHands: Record<string, any[]> = {}
             
             Object.entries(hands).forEach(([key, cards]) => {
-              const frontendPosition = positionMap[key as keyof typeof positionMap]
-              if (frontendPosition && Array.isArray(cards)) {
+              // Check if the key is a valid position
+              if ((key === 'North' || key === 'South' || key === 'East' || key === 'West') && Array.isArray(cards)) {
                 // Convert string format to object format
-                convertedHands[frontendPosition] = cards.map(cardString => {
+                convertedHands[key] = cards.map(cardString => {
                   // Handle "10" cards correctly. These cards start with T
                   let rank: string
                   let suitChar: string
@@ -498,26 +362,20 @@ export function useWebSocketMessages(roomId: string | undefined) {
         
         // Convert turn to currentPlayer
         if (gameData.turn) {
-          // Convert user ID to position by checking which position this user is assigned to
-          const { currentRoom } = useRoomDataStore.getState()
-          if (currentRoom) {
-            // Find which seat this user is assigned to
-            const seatMapping = getServerToFrontendPositionMap()
-            for (const [seatKey, playerId] of Object.entries(currentRoom.seats)) {
-              if (playerId && gameData.turn === playerId) {
-                gameData.currentPlayer = seatMapping[seatKey] || 'North'
-                break
-              }
-            }
-          }
-          // If we couldn't find a match, default to the first available position
-          if (!gameData.currentPlayer) {
+          // The server now sends positions directly (e.g., "North", "South", "East", "West")
+          // Since the server and frontend use the same format, we can use it directly
+          if (gameData.turn === 'North' || gameData.turn === 'South' || gameData.turn === 'East' || gameData.turn === 'West') {
+            gameData.currentPlayer = gameData.turn as Position
+            console.log('Start room - using turn position directly:', gameData.turn)
+          } else {
+            // If we couldn't find a valid position, default to North
             gameData.currentPlayer = 'North'
+            console.log('Start room - no valid position found for turn position:', gameData.turn, 'defaulting to North')
           }
         }
         
         // Convert ServerGameData to GameData format
-        const convertedGameData = {
+        const convertedGameData: GameData = {
           ...gameData,
           // Add missing GameData properties with defaults
           dealer: "North" as Position,
@@ -527,7 +385,7 @@ export function useWebSocketMessages(roomId: string | undefined) {
           firstCardPlayed: false,
           gameNumber: 1,
           vulnerability: { NS: false, EW: false }
-        } as any // Type assertion since we know the structure will be correct
+        }
         
         useGameStore.getState().updateGameData(convertedGameData)
         setAiThinking(false)
@@ -542,13 +400,7 @@ export function useWebSocketMessages(roomId: string | undefined) {
     websocketService.onMessage(WebSocketActions.PLAYER_JOINED, handlePlayerJoined)
     websocketService.onMessage(WebSocketActions.PLAYER_LEFT, handlePlayerLeft)
     websocketService.onMessage(WebSocketActions.ROOM_STARTED, handleStartRoom)
-
-    // New seat-based handlers
-    websocketService.onMessage(WebSocketActions.SEAT_BASED_GAME_STATE_UPDATE, handleSeatBasedGameStateUpdate)
-    websocketService.onMessage(WebSocketActions.SEAT_BASED_BID_MADE, handleSeatBasedBidMade)
-    websocketService.onMessage(WebSocketActions.SEAT_BASED_CARD_PLAYED, handleSeatBasedCardPlayed)
     
-    // Legacy game state handlers (for backward compatibility)
     websocketService.onMessage(WebSocketActions.GAME_STARTED, handleGameStarted)
     websocketService.onMessage(WebSocketActions.GAME_COMPLETED, handleGameCompleted)
     websocketService.onMessage(WebSocketActions.BID_MADE, handleBidMade)
@@ -561,12 +413,6 @@ export function useWebSocketMessages(roomId: string | undefined) {
       websocketService.offMessage(WebSocketActions.PLAYER_LEFT)
       websocketService.offMessage(WebSocketActions.ROOM_STARTED)
       
-      // New seat-based handlers
-      websocketService.offMessage(WebSocketActions.SEAT_BASED_GAME_STATE_UPDATE)
-      websocketService.offMessage(WebSocketActions.SEAT_BASED_BID_MADE)
-      websocketService.offMessage(WebSocketActions.SEAT_BASED_CARD_PLAYED)
-      
-      // Legacy handlers
       websocketService.offMessage(WebSocketActions.GAME_STARTED)
       websocketService.offMessage(WebSocketActions.GAME_COMPLETED)
       websocketService.offMessage(WebSocketActions.BID_MADE)

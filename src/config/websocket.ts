@@ -54,20 +54,13 @@ export const WebSocketActions = {
   MAKE_BID: 'makeBid',
   PLAY_CARD: 'playCard',
   
-  // Game state updates (from server) - Legacy format
+  // Game state updates (from server)
   GAME_STATE_UPDATE: 'gameStateUpdate',
   BID_UPDATE: 'bidUpdate',
   BID_MADE: 'bidMade',
   CARD_PLAYED: 'cardPlayed',
   GAME_STARTED: 'gameStarted',
   GAME_COMPLETED: 'gameCompleted',
-  
-  // New seat-based game state updates
-  SEAT_BASED_GAME_STATE_UPDATE: 'seatBasedGameStateUpdate',
-  SEAT_BASED_BID_MADE: 'seatBasedBidMade',
-  SEAT_BASED_CARD_PLAYED: 'seatBasedCardPlayed',
-  SEAT_BASED_GAME_STARTED: 'seatBasedGameStarted',
-  SEAT_BASED_GAME_COMPLETED: 'seatBasedGameCompleted'
 } as const
 
 export type WebSocketAction = typeof WebSocketActions[keyof typeof WebSocketActions]

@@ -74,16 +74,6 @@ export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
     }
   }
 
-  const getSeatDisplayName = (seat: string) => {
-    const seatNames: Record<string, string> = {
-      "N": "North",
-      "S": "South", 
-      "E": "East",
-      "W": "West"
-    }
-    return seatNames[seat] || seat
-  }
-
   const isCurrentPlayer = (seatPlayerName: string) => {
     return seatPlayerName === playerName
   }
@@ -99,6 +89,17 @@ export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
   }
 
   const getPlayerColor = (seat: string) => {
+    // Server now returns full position names, so we can use the seat directly
+    if (seat === 'North' || seat === 'South' || seat === 'East' || seat === 'West') {
+      const colors: Record<string, string> = {
+        "North": "from-blue-500 to-blue-600",
+        "South": "from-emerald-500 to-emerald-600",
+        "East": "from-pink-500 to-pink-600",
+        "West": "from-purple-500 to-purple-600"
+      }
+      return colors[seat] || "from-gray-500 to-gray-600"
+    }
+    // Fallback for any abbreviated format
     const colors: Record<string, string> = {
       "N": "from-blue-500 to-blue-600",
       "S": "from-emerald-500 to-emerald-600",

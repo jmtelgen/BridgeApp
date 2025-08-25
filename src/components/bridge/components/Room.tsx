@@ -11,6 +11,7 @@ import { connectionService } from "../../../services/connectionService"
 import { useUserStore } from "../../../stores/userStore"
 import { useRoomDataStore } from "../../../stores/roomDataStore"
 import { Position } from "../types"
+import { useGameStore } from "../../../stores/gameStore"
 
 // Default theme for the room manager
 const defaultTheme = {
@@ -36,7 +37,7 @@ interface RoomManagerProps {
 
 export function RoomManager({ onRoomJoined }: RoomManagerProps) {
   const { playerName: storedPlayerName, setPlayerName } = useUserStore()
-  const { setCurrentRoom, setCurrentPlayerPosition } = useRoomDataStore()
+  const { setCurrentRoom } = useRoomDataStore()
   const [activeTab, setActiveTab] = useState<"create" | "join">("create")
   const [isLoading, setIsLoading] = useState(false)
   const [connectionCount, setConnectionCount] = useState<number>(0)
@@ -124,26 +125,12 @@ export function RoomManager({ onRoomJoined }: RoomManagerProps) {
         // Store the room data
         setCurrentRoom(roomData)
         
-        // Find which seat the current player is assigned to
-        const seatMapping: Record<string, Position> = {
-          "N": "North",
-          "S": "South", 
-          "E": "East",
-          "W": "West"
-        }
+        // Use the game store method to detect and set position
+        const { detectAndSetCurrentPlayerPosition } = useGameStore.getState()
+        const { userId } = useUserStore.getState()
+        const detectedPosition = userId ? detectAndSetCurrentPlayerPosition(roomData.seats, userId) : null
+        const playerPosition = detectedPosition || "South"
         
-        // Find the seat where the current player is assigned
-        let playerPosition: Position = "South" // Default fallback
-        for (const [seatKey, playerId] of Object.entries(roomData.seats)) {
-          if (playerId && typeof playerId === 'string' && playerId.includes(playerName.trim())) {
-            playerPosition = seatMapping[seatKey] || "South"
-            break
-          }
-        }
-
-        // Set the current player position
-        setCurrentPlayerPosition(playerPosition)
-
         // Navigate to the room
         onRoomJoined(roomData.roomId, playerPosition)
       } else {
@@ -185,26 +172,12 @@ export function RoomManager({ onRoomJoined }: RoomManagerProps) {
         // Store the room data
         setCurrentRoom(roomData)
         
-        // Find which seat the current player is assigned to
-        const seatMapping: Record<string, Position> = {
-          "N": "North",
-          "S": "South", 
-          "E": "East",
-          "W": "West"
-        }
+        // Use the game store method to detect and set position
+        const { detectAndSetCurrentPlayerPosition } = useGameStore.getState()
+        const { userId } = useUserStore.getState()
+        const detectedPosition = userId ? detectAndSetCurrentPlayerPosition(roomData.seats, userId) : null
+        const playerPosition = detectedPosition || "North"
         
-        // Find the seat where the current player is assigned
-        let playerPosition: Position = "North" // Default fallback
-        for (const [seatKey, playerName] of Object.entries(roomData.seats)) {
-          if (playerName === joinPlayerName.trim()) {
-            playerPosition = seatMapping[seatKey] || "North"
-            break
-          }
-        }
-
-        // Set the current player position
-        setCurrentPlayerPosition(playerPosition)
-
         // Navigate to the room
         onRoomJoined(roomData.roomId, playerPosition)
       } else {
@@ -247,7 +220,7 @@ export function RoomManager({ onRoomJoined }: RoomManagerProps) {
       } = {
         roomId: mockRoomId,
         ownerId: "quick-join-owner",
-        seats: { "E": playerName.trim() },
+        seats: { "East": playerName.trim() },
         state: "waiting",
         gameData: null
       }
@@ -255,26 +228,12 @@ export function RoomManager({ onRoomJoined }: RoomManagerProps) {
       // Simulate network delay
       await new Promise(resolve => setTimeout(resolve, 500))
 
-      // Find which seat the current player is assigned to
-      const seatMapping: Record<string, Position> = {
-        "N": "North",
-        "S": "South", 
-        "E": "East",
-        "W": "West"
-      }
+      // Use the game store method to detect and set position
+      const { detectAndSetCurrentPlayerPosition } = useGameStore.getState()
+      const { userId } = useUserStore.getState()
+      const detectedPosition = userId ? detectAndSetCurrentPlayerPosition(mockRoomData.seats, userId) : null
+      const playerPosition = detectedPosition || "East"
       
-      // Find the seat where the current player is assigned
-      let playerPosition: Position = "East" // Default fallback
-      for (const [seatKey, playerId] of Object.entries(mockRoomData.seats)) {
-        if (playerId && typeof playerId === 'string' && playerId.includes(playerName.trim())) {
-          playerPosition = seatMapping[seatKey] || "East"
-          break
-        }
-      }
-
-      // Set the current player position
-      setCurrentPlayerPosition(playerPosition)
-
       // Show success message
       const { showSuccess } = await import("../../../stores/errorStore").then(m => m.useErrorStore.getState())
       showSuccess("Quick joined room successfully!")

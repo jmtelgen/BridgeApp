@@ -15,7 +15,8 @@ export const BiddingArea = ({ onMakeBid }: BiddingAreaProps) => {
   
   // Get data from stores
   const { gameData, aiThinking, isMyTurn, canMakeMove } = useGameStore()
-  const { getCurrentPlayerPosition, getPlayerDisplayName, isRobot } = useRoomDataStore()
+  const { getPlayerDisplayName, isRobot, getDisplayPositionLabel } = useRoomDataStore()
+  const { getCurrentPlayerPosition } = useGameStore()
 
   // Safety check - ensure gameData exists
   if (!gameData) {
@@ -44,6 +45,7 @@ export const BiddingArea = ({ onMakeBid }: BiddingAreaProps) => {
   // Check if current player is human and it's their turn to bid using new seat-based logic
   const currentPlayerPosition = getCurrentPlayerPosition()
   const currentPlayerSeat = currentPlayerPosition ? getSeatKey(currentPlayerPosition) : null
+  const displayPositionLabel = currentPlayerPosition ? getDisplayPositionLabel(currentPlayerPosition, currentPlayerPosition) : null
   const currentPlayerName = currentPlayerSeat ? getPlayerDisplayName(currentPlayerSeat) : "Unknown Player"
   const isCurrentPlayerHuman = currentPlayerName ? !isRobot(currentPlayerName) : false
   const isCurrentUserTurn = isMyTurn() && canMakeMove()

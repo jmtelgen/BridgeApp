@@ -24,21 +24,18 @@ interface RoomData {
 interface RoomDataStore {
   // State
   currentRoom: RoomData | null
-  currentPlayerPosition: Position // Track which seat the current player is in
   
   // Actions
   setCurrentRoom: (room: RoomData) => void
   updateCurrentRoom: (updates: Partial<RoomData>) => void
   clearCurrentRoom: () => void
-  setCurrentPlayerPosition: (position: Position) => void
   getPlayerName: (seat: string) => string | null
   getPlayerDisplayName: (seat: string) => string
   isRobot: (playerName: string) => boolean
-  getCurrentPlayerPosition: () => Position  
-  getEastPlayerName: () => String | null
-  getWestPlayerName: () => String | null
-  getNorthPlayerName: () => String | null
-  getDisplayPositionLabel: (displayPosition: Position) => string
+  getEastPlayerName: (currentPlayerPosition: Position) => String | null
+  getWestPlayerName: (currentPlayerPosition: Position) => String | null
+  getNorthPlayerName: (currentPlayerPosition: Position) => String | null
+  getDisplayPositionLabel: (displayPosition: Position, currentPlayerPosition: Position) => string
 }
 
 export const useRoomDataStore = create<RoomDataStore>()(
@@ -46,7 +43,6 @@ export const useRoomDataStore = create<RoomDataStore>()(
     (set, get) => ({
       // Initial state
       currentRoom: null,
-      currentPlayerPosition: "South",
 
       // Actions
       setCurrentRoom: (room) => {
@@ -60,11 +56,7 @@ export const useRoomDataStore = create<RoomDataStore>()(
       },
 
       clearCurrentRoom: () => {
-        set({ currentRoom: null, currentPlayerPosition: "South" })
-      },
-
-      setCurrentPlayerPosition: (position) => {
-        set({ currentPlayerPosition: position })
+        set({ currentRoom: null })
       },
 
       getPlayerName: (seat: string) => {
@@ -99,22 +91,22 @@ export const useRoomDataStore = create<RoomDataStore>()(
         return playerId.substring(0, 8) + '...'
       },
 
-      getEastPlayerName: () => {
+      getEastPlayerName: (currentPlayerPosition: Position) => {
         const { currentRoom } = get()
         if (!currentRoom) return null
-        return currentRoom.seats[subtractPositions(get().currentPlayerPosition, "East")] || null
+        return currentRoom.seats[subtractPositions(currentPlayerPosition, "East")] || null
       },
 
-      getWestPlayerName: () => {
+      getWestPlayerName: (currentPlayerPosition: Position) => {
         const { currentRoom } = get()
         if (!currentRoom) return null
-        return currentRoom.seats[subtractPositions(get().currentPlayerPosition, "West")] || null
+        return currentRoom.seats[subtractPositions(currentPlayerPosition, "West")] || null
       },
       
-      getNorthPlayerName: () => {
+      getNorthPlayerName: (currentPlayerPosition: Position) => {
         const { currentRoom } = get()
         if (!currentRoom) return null
-        return currentRoom.seats[subtractPositions(get().currentPlayerPosition, "North")] || null
+        return currentRoom.seats[subtractPositions(currentPlayerPosition, "North")] || null
       },
 
       isRobot: (playerName: string) => {
@@ -124,22 +116,16 @@ export const useRoomDataStore = create<RoomDataStore>()(
            playerName.toLowerCase().includes('bot')
       },
 
-        getCurrentPlayerPosition: () => {
-    return get().currentPlayerPosition
-  },
-
-      getDisplayPositionLabel: (displayPosition: Position) => {
-        const currentPos = get().currentPlayerPosition
+      getDisplayPositionLabel: (displayPosition: Position, currentPlayerPosition: Position) => {
         // We want: what does the current player see at 'displayPosition'?
         // This is the opposite of subtractPositions - we need what 'currentPos' looks like from 'displayPosition' perspective
-        return subtractPositions(currentPos, displayPosition)
+        return subtractPositions(currentPlayerPosition, displayPosition)
       }
     }),
     {
       name: 'bridge-room-data-storage', // localStorage key
       partialize: (state) => ({ 
-        currentRoom: state.currentRoom,
-        currentPlayerPosition: state.currentPlayerPosition
+        currentRoom: state.currentRoom
       })
     }
   )
