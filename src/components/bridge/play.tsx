@@ -135,6 +135,76 @@ export default function BridgeGame() {
 
       {/* Game Layout - Players positioned at screen edges */}
       <div className="fixed inset-0 z-20 pointer-events-none">
+        {/* Played Cards Display - Center of screen */}
+        {gameData.phase === "playing" && gameData.currentTrick && Object.values(gameData.currentTrick.cards).some(card => card !== null) && (
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+            {/* Turn Indicator */}
+            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-20">
+              <div className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
+                <span className="font-semibold">Current Turn: </span>
+                <span className="font-bold text-lg">{gameData.currentPlayer}</span>
+              </div>
+            </div>
+            
+            {/* Trick Counter */}
+            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-12">
+              <div className="bg-green-600 text-white px-3 py-1 rounded-lg shadow-lg text-sm">
+                <span className="font-semibold">Trick {(gameData.tricks?.length || 0) + 1}</span>
+              </div>
+            </div>
+            
+            <div className="relative w-80 h-80">
+              {/* North card - top center */}
+              {gameData.currentTrick.cards.North && (
+                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 animate-in fade-in duration-300">
+                  <Card
+                    card={gameData.currentTrick.cards.North}
+                    isClickable={false}
+                    isSelected={false}
+                    isPlayed={true}
+                  />
+                </div>
+              )}
+              
+              {/* West card - left center */}
+              {gameData.currentTrick.cards.West && (
+                <div className="absolute left-0 top-1/2 transform -translate-y-1/2 animate-in fade-in duration-300">
+                  <Card
+                    card={gameData.currentTrick.cards.West}
+                    isClickable={false}
+                    isSelected={false}
+                    isPlayed={true}
+                  />
+                </div>
+              )}
+              
+              {/* East card - right center */}
+              {gameData.currentTrick.cards.East && (
+                <div className="absolute right-0 top-1/2 transform -translate-y-1/2 animate-in fade-in duration-300">
+                  <Card
+                    card={gameData.currentTrick.cards.East}
+                    isClickable={false}
+                    isSelected={false}
+                    isPlayed={true}
+                  />
+                </div>
+              )}
+              
+              {/* South card - bottom center */}
+              {gameData.currentTrick.cards.South && (
+                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 animate-in fade-in duration-300">
+                  <Card
+                    card={gameData.currentTrick.cards.South}
+                    isClickable={false}
+                    isSelected={false}
+                    isPlayed={true}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* North Player - Top */}
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 pointer-events-auto">
           <div className="flex flex-col items-center gap-2">

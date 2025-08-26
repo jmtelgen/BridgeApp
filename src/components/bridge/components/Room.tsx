@@ -1,35 +1,15 @@
 import { useState, useEffect } from "react"
-
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Users, Plus, RefreshCw, DoorOpen } from "lucide-react"
+import { Users, Plus, LogIn, UserPlus, DoorOpen, RefreshCw, Settings, Crown, Loader } from "lucide-react"
 import { roomService } from "../../../services"
 import { connectionService } from "../../../services/connectionService"
 import { useUserStore } from "../../../stores/userStore"
 import { useRoomDataStore } from "../../../stores/roomDataStore"
 import { Position } from "../types"
 import { useGameStore } from "../../../stores/gameStore"
-
-// Default theme for the room manager
-const defaultTheme = {
-  colors: {
-    background: "bg-green-50",
-    cardBackground: "bg-white",
-    tableBackground: "bg-green-200",
-    primary: "bg-green-600 text-white",
-    secondary: "bg-green-100 text-green-800",
-    accent: "bg-green-500",
-    text: "text-gray-900",
-    textMuted: "text-gray-600",
-    border: "border-green-300",
-    cardBorder: "border-gray-300",
-    selectedCard: "ring-green-500 bg-green-50",
-    currentPlayer: "bg-green-600 text-white",
-  }
-}
 
 interface RoomManagerProps {
   onRoomJoined: (roomId: string, playerPosition: Position) => void
@@ -38,12 +18,12 @@ interface RoomManagerProps {
 export function RoomManager({ onRoomJoined }: RoomManagerProps) {
   const { playerName: storedPlayerName, setPlayerName } = useUserStore()
   const { setCurrentRoom } = useRoomDataStore()
-  const [activeTab, setActiveTab] = useState<"create" | "join">("create")
   const [isLoading, setIsLoading] = useState(false)
   const [connectionCount, setConnectionCount] = useState<number>(0)
   const [activeUserCount, setActiveUserCount] = useState<number>(0)
   const [activeRoomCount, setActiveRoomCount] = useState<number>(0)
   const [isLoadingConnections, setIsLoadingConnections] = useState(true)
+  const [activeTab, setActiveTab] = useState<"create" | "join">("create")
 
   // Create room form state
   const [roomName, setRoomName] = useState("")
@@ -250,237 +230,208 @@ export function RoomManager({ onRoomJoined }: RoomManagerProps) {
   }
 
   return (
-    <div className={`min-h-screen ${defaultTheme.colors.background} p-4`}>
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className={`text-4xl font-bold mb-2 ${defaultTheme.colors.text}`}>Bridge Rooms</h1>
-          <p className={`text-lg ${defaultTheme.colors.textMuted}`}>Create or join a bridge game room</p>
-          
+    <main className="min-h-screen relative overflow-hidden">
+      {/* Animated Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-violet-400 via-purple-500 to-indigo-600">
+        <div className="absolute inset-0 bg-gradient-to-tl from-cyan-400 via-blue-500 to-purple-600 opacity-70 animate-pulse"></div>
+        <div className="absolute top-0 left-0 w-96 h-96 bg-gradient-to-br from-pink-400 to-purple-600 rounded-full mix-blend-multiply filter blur-xl opacity-70" style={{ animation: 'float1 8s ease-in-out infinite' }}></div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-yellow-400 to-pink-600 rounded-full mix-blend-multiply filter blur-xl opacity-70" style={{ animation: 'float2 10s ease-in-out infinite reverse' }}></div>
+        <div className="absolute -bottom-8 left-20 w-96 h-96 bg-gradient-to-br from-blue-400 to-indigo-600 rounded-full mix-blend-multiply filter blur-xl opacity-70" style={{ animation: 'float1 8s ease-in-out infinite', animationDelay: '4s' }}></div>
+      </div>
 
-          
-          {/* Active Users Display */}
-          <div className="mt-4 flex justify-center items-center gap-2">
-            <Users className="w-5 h-5 text-gray-500" />
-            <span className={`text-sm ${defaultTheme.colors.textMuted}`}>
-              {isLoadingConnections ? (
-                "Loading active users..."
-              ) : (
-                `${activeUserCount} active user${activeUserCount !== 1 ? 's' : ''} online`
-              )}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={fetchConnectionCount}
-              disabled={isLoadingConnections}
-              className="p-1 h-auto"
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoadingConnections ? 'animate-spin' : ''}`} />
-            </Button>
-          </div>
+      <div className="absolute inset-0 backdrop-blur-sm bg-white/10 dark:bg-black/20"></div>
+
+      {/* Header */}
+      <div className="relative z-10 flex justify-between items-center p-6">
+        <div className="flex items-center gap-2">
+          <Users className="h-8 w-8 text-white" />
+          <h1 className="text-2xl font-bold text-white">Bridge Game</h1>
         </div>
-
-        {/* Tab Navigation */}
-        <div className="flex justify-center mb-6">
-          <div className={`flex ${defaultTheme.colors.cardBackground} rounded-lg p-1 border ${defaultTheme.colors.border}`}>
-            <Button
-              variant={activeTab === "create" ? "default" : "ghost"}
-              onClick={() => setActiveTab("create")}
-              className="flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Create Room
-            </Button>
-            <Button
-              variant={activeTab === "join" ? "default" : "ghost"}
-              onClick={() => setActiveTab("join")}
-              className="flex items-center gap-2"
-            >
-              <DoorOpen className="w-4 h-4" />
-              Join Room
-            </Button>
-          </div>
-        </div>
-
-        {/* Error Display */}
-        {/* Error Display */}
-
-        {/* Create Room Tab */}
-        {activeTab === "create" && (
-          <div className="max-w-md mx-auto">
-            <Card className={`${defaultTheme.colors.cardBackground} border ${defaultTheme.colors.border}`}>
-              <CardHeader>
-                <CardTitle className={`text-center ${defaultTheme.colors.text}`}>Create New Room</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="playerName" className={defaultTheme.colors.text}>
-                    Your Name
-                  </Label>
-                  <Input
-                    id="playerName"
-                    value={playerName}
-                    onChange={(e) => setLocalPlayerName(e.target.value)}
-                    onBlur={handlePlayerNameBlur}
-                    placeholder="Enter your name"
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="roomName" className={defaultTheme.colors.text}>
-                    Room Name
-                  </Label>
-                  <Input
-                    id="roomName"
-                    value={roomName}
-                    onChange={(e) => setRoomName(e.target.value)}
-                    placeholder="Enter room name"
-                    className="mt-1"
-                  />
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="isPrivate"
-                    checked={isPrivate}
-                    onChange={(e) => setIsPrivate(e.target.checked)}
-                    className="rounded"
-                  />
-                  <Label htmlFor="isPrivate" className={defaultTheme.colors.text}>
-                    Private Room
-                  </Label>
-                </div>
-
-                <div className="flex gap-2 pt-4">
-                  <Button
-                    onClick={createRoom}
-                    disabled={isLoading}
-                    className="flex-1 flex items-center justify-center gap-2"
-                  >
-                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    {isLoading ? "Creating..." : "Create Room"}
-                  </Button>
-                </div>
-
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className={`w-full border-t ${defaultTheme.colors.border}`} />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className={`${defaultTheme.colors.background} px-2 ${defaultTheme.colors.textMuted}`}>Or</span>
-                  </div>
-                </div>
-
-                <Button
-                  onClick={quickJoin}
-                  disabled={isLoading || !playerName.trim()}
-                  variant="outline"
-                  className="w-full flex items-center justify-center gap-2 bg-transparent"
-                >
-                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-                  {isLoading ? "Finding..." : "Quick Join Available Room"}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Join Room Tab */}
-        {activeTab === "join" && (
-          <div className="max-w-md mx-auto">
-            <Card className={`${defaultTheme.colors.cardBackground} border ${defaultTheme.colors.border}`}>
-              <CardHeader>
-                <CardTitle className={`text-center ${defaultTheme.colors.text}`}>Join Existing Room</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="joinPlayerName" className={defaultTheme.colors.text}>
-                    Your Name
-                  </Label>
-                  <Input
-                    id="joinPlayerName"
-                    value={joinPlayerName}
-                    onChange={(e) => setJoinPlayerName(e.target.value)}
-                    onBlur={handleJoinPlayerNameBlur}
-                    placeholder="Enter your name"
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="roomId" className={defaultTheme.colors.text}>
-                    Room ID
-                  </Label>
-                  <Input
-                    id="roomId"
-                    value={roomId}
-                    onChange={(e) => setRoomId(e.target.value)}
-                    placeholder="Enter room ID"
-                    className="mt-1"
-                  />
-                </div>
-
-                <Button
-                  onClick={joinRoom}
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-2"
-                >
-                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <DoorOpen className="w-4 h-4" />}
-                  {isLoading ? "Joining..." : "Join Room"}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Info Cards */}
-        <div className="grid md:grid-cols-2 gap-6 mt-8 max-w-4xl mx-auto">
-          <Card className={`${defaultTheme.colors.cardBackground} border ${defaultTheme.colors.border}`}>
-            <CardHeader>
-              <CardTitle className={`text-lg ${defaultTheme.colors.text}`}>How to Create a Room</CardTitle>
-            </CardHeader>
-            <CardContent className={defaultTheme.colors.textMuted}>
-              <ul className="space-y-2 text-sm">
-                <li>• Enter your name and a room name</li>
-                <li>• Choose if the room should be private</li>
-                <li>• Share the room ID with friends to join</li>
-                <li>• Or use Quick Join to find an available room</li>
-              </ul>
-            </CardContent>
-          </Card>
-
-          <Card className={`${defaultTheme.colors.cardBackground} border ${defaultTheme.colors.border}`}>
-            <CardHeader>
-              <CardTitle className={`text-lg ${defaultTheme.colors.text}`}>How to Join a Room</CardTitle>
-            </CardHeader>
-            <CardContent className={defaultTheme.colors.textMuted}>
-              <ul className="space-y-2 text-sm">
-                <li>• Get a room ID from a friend</li>
-                <li>• Enter your name and the room ID</li>
-                <li>• You'll be assigned a position automatically</li>
-                <li>• Wait for other players to join</li>
-              </ul>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Room Status */}
-        <div className="text-center mt-8">
-          <div className="flex justify-center gap-4">
-            <Badge variant="outline" className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              Online Players: {isLoadingConnections ? "..." : activeUserCount}
-            </Badge>
-            <Badge variant="outline" className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              Active Rooms: {isLoadingConnections ? "..." : activeRoomCount}
-            </Badge>
-          </div>
+        <div className="flex gap-3">
+          <Button variant="ghost" className="text-white hover:bg-white/20">
+            <LogIn className="h-4 w-4 mr-2" />
+            Login
+          </Button>
+          <Button className="bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white border-0">
+            <UserPlus className="h-4 w-4 mr-2" />
+            Sign Up
+          </Button>
         </div>
       </div>
-    </div>
+
+      {/* Active Users Display - Fixed Position */}
+      <div className="relative z-10 flex justify-center mb-8 mt-16">
+        <div className="inline-flex items-center gap-4 bg-white/20 backdrop-blur-sm rounded-full px-6 py-3">
+          <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+            <Users className="h-3 w-3 mr-1" />
+            {isLoadingConnections ? "Loading..." : `${activeUserCount} Active Players`}
+          </Badge>
+          <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+            {isLoadingConnections ? "Loading..." : `${activeRoomCount} Active Rooms`}
+          </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={fetchConnectionCount}
+            disabled={isLoadingConnections}
+            className="h-6 w-6 p-0 text-white hover:bg-white/20"
+          >
+            <RefreshCw className={`h-3 w-3 ${isLoadingConnections ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+      </div>
+
+      {/* Tab Navigation - Fixed Position */}
+      <div className="relative z-10 flex justify-center mb-4">
+        <div className="flex bg-white/20 backdrop-blur-sm rounded-lg p-1">
+          <Button
+            variant={activeTab === "create" ? "default" : "ghost"}
+            onClick={() => setActiveTab("create")}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Create Room
+          </Button>
+          <Button
+            variant={activeTab === "join" ? "default" : "ghost"}
+            onClick={() => setActiveTab("join")}
+            className="flex items-center gap-2"
+          >
+            <DoorOpen className="w-4 h-4" />
+            Join Room
+          </Button>
+        </div>
+      </div>
+
+      {/* Main Content - Cards Only */}
+      <div className="relative z-10 flex justify-center">
+        <div className="w-full max-w-md px-6">
+          {/* Create Room Tab */}
+          {activeTab === "create" && (
+            <Card className="bg-white shadow-2xl border-0">
+              <CardHeader className="text-center">
+                <CardTitle className="text-2xl font-bold text-gray-900">Create New Room</CardTitle>
+                <CardDescription className="text-gray-600">Start a new game and invite your friends</CardDescription>
+              </CardHeader>
+                             <CardContent className="space-y-5">
+                 <Input
+                   placeholder="Your name"
+                   value={playerName}
+                   onChange={(e) => setLocalPlayerName(e.target.value)}
+                   onBlur={handlePlayerNameBlur}
+                   className="text-center"
+                 />
+                 <Input
+                   placeholder="Room name"
+                   value={roomName}
+                   onChange={(e) => setRoomName(e.target.value)}
+                   className="text-center"
+                 />
+                 <div className="flex items-center space-x-2">
+                   <input
+                     type="checkbox"
+                     id="isPrivate"
+                     checked={isPrivate}
+                     onChange={(e) => setIsPrivate(e.target.checked)}
+                     className="rounded"
+                   />
+                   <label htmlFor="isPrivate" className="text-sm text-gray-600">
+                     Private Room
+                   </label>
+                 </div>
+                 <Button
+                   onClick={createRoom}
+                   disabled={isLoading || !roomName.trim() || !playerName.trim()}
+                   className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold py-3"
+                 >
+                   {isLoading ? (
+                     <>
+                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                       Creating...
+                     </>
+                   ) : (
+                     <>
+                       <Plus className="h-5 w-5 mr-2" />
+                       Create Room
+                     </>
+                   )}
+                 </Button>
+
+                 <div className="relative">
+                   <div className="absolute inset-0 flex items-center">
+                     <span className="w-full border-t border-gray-300" />
+                   </div>
+                   <div className="relative flex justify-center text-xs uppercase">
+                     <span className="bg-white px-2 text-gray-500">Or</span>
+                   </div>
+                 </div>
+
+                 <Button
+                   onClick={quickJoin}
+                   disabled={isLoading || !playerName.trim()}
+                   variant="outline"
+                   className="w-full"
+                 >
+                   {isLoading ? (
+                     <>
+                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+                       Finding...
+                     </>
+                   ) : (
+                     <>
+                       <Users className="h-5 w-5 mr-2" />
+                       Quick Join
+                     </>
+                   )}
+                 </Button>
+               </CardContent>
+            </Card>
+          )}
+
+          {/* Join Room Tab */}
+          {activeTab === "join" && (
+            <Card className="bg-white shadow-2xl border-0">
+              <CardHeader className="text-center">
+                <CardTitle className="text-2xl font-bold text-gray-900">Join Room</CardTitle>
+                <CardDescription className="text-gray-600">Enter a room code to join an existing game</CardDescription>
+              </CardHeader>
+                <CardContent className="space-y-5">
+                 <Input
+                   placeholder="Your name"
+                   value={joinPlayerName}
+                   onChange={(e) => setJoinPlayerName(e.target.value)}
+                   onBlur={handleJoinPlayerNameBlur}
+                   className="text-center"
+                 />
+                 <Input
+                   placeholder="ENTER ROOM CODE (E.G., GAME-1234)"
+                   value={roomId}
+                   onChange={(e) => setRoomId(e.target.value)}
+                   className="text-center font-mono text-lg tracking-wider uppercase"
+                   maxLength={9}
+                 />
+                 <Button
+                   onClick={joinRoom}
+                   disabled={isLoading || !roomId.trim() || !joinPlayerName.trim()}
+                   className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold py-3 disabled:opacity-50"
+                 >
+                   {isLoading ? (
+                     <>
+                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                       Joining...
+                     </>
+                   ) : (
+                     <>
+                       <Users className="h-5 w-5 mr-2" />
+                       Join Room
+                     </>
+                   )}
+                 </Button>
+               </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </main>
   )
 }

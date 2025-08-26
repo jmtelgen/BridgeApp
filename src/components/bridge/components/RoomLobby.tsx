@@ -5,7 +5,10 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, Users, Bot, User, Play, RefreshCw, ArrowLeft, Share2 } from "lucide-react"
 import { useRoomDataStore } from "../../../stores/roomDataStore"
 import { useUserStore } from "../../../stores/userStore"
+import { useGameStore } from "../../../stores/gameStore"
 import { roomWebSocketService } from "../../../services/websocketService"
+import { subtractPositions } from "../../../utils/positionUtils"
+import { Position } from "../types"
 
 interface RoomLobbyProps {
   onStartGame: () => void
@@ -15,7 +18,19 @@ interface RoomLobbyProps {
 export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
   const { currentRoom, isRobot } = useRoomDataStore()
   const { playerName } = useUserStore()
+  const { getCurrentPlayerPosition } = useGameStore()
   const [isStarting, setIsStarting] = useState(false)
+  
+  // Get current player position for view calculations
+  const currentPlayerPosition = getCurrentPlayerPosition()
+  
+  // Calculate relative positions once to avoid repeated subtractPositions calls
+  const relativePositions = currentPlayerPosition ? {
+    north: subtractPositions(currentPlayerPosition, "North"),
+    south: subtractPositions(currentPlayerPosition, "South"),
+    east: subtractPositions(currentPlayerPosition, "East"),
+    west: subtractPositions(currentPlayerPosition, "West")
+  } : null
 
   // Listen for roomStarted events from WebSocket
   useEffect(() => {
@@ -84,8 +99,8 @@ export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
     // Could add toast notification here
   }
 
-  const getPlayerInitial = (playerName: string) => {
-    return playerName ? playerName.charAt(0).toUpperCase() : "?"
+  const getPlayerInitial = (position: Position) => {
+    return position ? position.charAt(0) : "?"
   }
 
   const getPlayerColor = (seat: string) => {
@@ -118,13 +133,13 @@ export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
         <div className="absolute top-8 left-1/2 transform -translate-x-1/2 rotate-180 pointer-events-auto">
           <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg">
             <div className="flex items-center gap-2">
-              {seats["N"] ? (
+              {relativePositions && seats[relativePositions.north] ? (
                 <>
-                  <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("N")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                    {isRobot(seats["N"]) ? "🤖" : getPlayerInitial(seats["N"])}
+                  <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("North")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
+                    {isRobot(seats[relativePositions.north]) ? "🤖" : getPlayerInitial(relativePositions.north)}
                   </div>
                   <span className="font-semibold text-gray-800">
-                    {isCurrentPlayer(seats["N"]) ? "You" : seats["N"]}
+                    {isCurrentPlayer(seats[relativePositions.north]) ? "You" : seats[relativePositions.north]}
                   </span>
                 </>
               ) : (
@@ -143,13 +158,13 @@ export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
         <div className="absolute left-8 top-1/2 transform -translate-y-1/2 rotate-90 pointer-events-auto">
           <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg">
             <div className="flex items-center gap-2">
-              {seats["W"] ? (
+              {relativePositions && seats[relativePositions.west] ? (
                 <>
-                  <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("W")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                    {isRobot(seats["W"]) ? "🤖" : getPlayerInitial(seats["W"])}
+                  <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("West")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
+                    {isRobot(seats[relativePositions.west]) ? "🤖" : getPlayerInitial(relativePositions.west)}
                   </div>
                   <span className="font-semibold text-gray-800">
-                    {isCurrentPlayer(seats["W"]) ? "You" : seats["W"]}
+                    {isCurrentPlayer(seats[relativePositions.west]) ? "You" : seats[relativePositions.west]}
                   </span>
                 </>
               ) : (
@@ -168,13 +183,13 @@ export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
         <div className="absolute right-8 top-1/2 transform -translate-y-1/2 -rotate-90 pointer-events-auto">
           <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg">
             <div className="flex items-center gap-2">
-              {seats["E"] ? (
+              {relativePositions && seats[relativePositions.east] ? (
                 <>
-                  <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("E")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                    {isRobot(seats["E"]) ? "🤖" : getPlayerInitial(seats["E"])}
+                  <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("East")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
+                    {isRobot(seats[relativePositions.east]) ? "🤖" : getPlayerInitial(relativePositions.east)}
                   </div>
                   <span className="font-semibold text-gray-800">
-                    {isCurrentPlayer(seats["E"]) ? "You" : seats["E"]}
+                    {isCurrentPlayer(seats[relativePositions.east]) ? "You" : seats[relativePositions.east]}
                   </span>
                 </>
               ) : (
@@ -193,13 +208,13 @@ export function RoomLobby({ onStartGame, onLeaveRoom }: RoomLobbyProps) {
         <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 pointer-events-auto">
           <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg">
             <div className="flex items-center gap-2">
-              {seats["S"] ? (
+              {relativePositions && seats[relativePositions.south] ? (
                 <>
-                  <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("S")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                    {isRobot(seats["S"]) ? "🤖" : getPlayerInitial(seats["S"])}
+                  <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("South")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
+                    {isRobot(seats[relativePositions.south]) ? "🤖" : getPlayerInitial(relativePositions.south)}
                   </div>
                   <span className="font-semibold text-gray-800">
-                    {isCurrentPlayer(seats["S"]) ? "You" : seats["S"]}
+                    {isCurrentPlayer(seats[relativePositions.south]) ? "You" : seats[relativePositions.south]}
                   </span>
                 </>
               ) : (

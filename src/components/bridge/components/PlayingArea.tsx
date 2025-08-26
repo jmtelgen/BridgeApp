@@ -45,75 +45,13 @@ export const PlayingArea = ({ gameState }: PlayingAreaProps) => {
         </div>
       )}
 
-      {/* Played cards in center */}
-      <div className="grid grid-cols-3 grid-rows-3 gap-4 w-48 h-48 mx-auto">
-        {/* Determine which trick to show - current trick if cards are being played, previous trick if not */}
-        {(() => {
-          // Defensive check for currentTrick
-          if (!gameState.currentTrick) {
-            return null
-          }
-          const hasCurrentCards = Object.values(gameState.currentTrick.cards).some(card => card !== null)
-          const trickToShow = hasCurrentCards ? gameState.currentTrick : gameState.previousTrick
-          
-          if (!trickToShow) return null
-          
-          return (
-            <>
-              {/* North card */}
-              <div></div>
-              <div className="flex justify-center">
-                {trickToShow.cards.North && (
-                  <Card
-                    card={trickToShow.cards.North}
-                    isClickable={false}
-                    isSelected={false}
-                    isPlayed={true}
-                  />
-                )}
-              </div>
-              <div></div>
-
-              {/* West and East cards */}
-              <div className="flex justify-center items-center">
-                {trickToShow.cards.West && (
-                  <Card
-                    card={trickToShow.cards.West}
-                    isClickable={false}
-                    isSelected={false}
-                    isPlayed={true}
-                  />
-                )}
-              </div>
-              <div></div>
-              <div className="flex justify-center items-center">
-                {trickToShow.cards.East && (
-                  <Card
-                    card={trickToShow.cards.East}
-                    isClickable={false}
-                    isSelected={false}
-                    isPlayed={true}
-                  />
-                )}
-              </div>
-
-              {/* South card */}
-              <div></div>
-              <div className="flex justify-center">
-                {trickToShow.cards.South && (
-                  <Card
-                    card={trickToShow.cards.South}
-                    isClickable={false}
-                    isSelected={false}
-                    isPlayed={true}
-                  />
-                )}
-              </div>
-              <div></div>
-            </>
-          )
-        })()}
-      </div>
+      {/* Message when no cards are being played yet */}
+      {gameState.phase === "playing" && (!gameState.currentTrick || !Object.values(gameState.currentTrick.cards).some(card => card !== null)) && (
+        <div className="text-center text-gray-600 mt-8">
+          <p className="text-lg">Waiting for cards to be played...</p>
+          <p className="text-sm mt-2">Cards will appear in the center of the screen when played</p>
+        </div>
+      )}
 
       {/* Dummy indicator */}
       {gameState.dummy && (
