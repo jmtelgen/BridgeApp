@@ -1,5 +1,10 @@
 # GitHub frontend CI and manual AWS staging access check
 
+For the separately reviewed application publisher, see
+[isolated staging frontend publication](staging-frontend.md). Its manual workflow
+requires additional narrowly scoped S3/CloudFront permissions; the historical
+identity-only bootstrap below intentionally grants none.
+
 ## What this enables (and does not)
 
 This is a publishing/bootstrap step, **not an application deployment**.
@@ -28,8 +33,9 @@ allowance removed. Access checks are restricted to `main`.
 
 PR CI has only `contents: read`, does not persist checkout credentials, and has
 no AWS OIDC token permission or environment/deployment credentials.
-There is no `pull_request_target` workflow. Only the access-check job has
-`id-token: write`; it has no repository permissions.
+There is no `pull_request_target` workflow. Only the access-check and manual
+staging-publication jobs have `id-token: write`; ordinary PR CI has none.
+The access-check job has no repository permissions.
 
 ## AWS console setup: a dedicated role, not root
 
@@ -183,8 +189,9 @@ observability, backups, rollback, and real integration/browser acceptance tests.
 Resolve the existing historical test failures and establish the additional
 release gates explicitly.
 
-Only then design a separately reviewed deployment workflow and narrowly scoped
-resource-specific deployment permissions for the appropriate roles. The current
-role intentionally cannot deploy. **Do not invoke the existing `deploy.sh`: it
+The separately reviewed [staging publisher](staging-frontend.md) implements
+frontend publication against that infrastructure contract, but the current
+identity-only role intentionally cannot deploy until its scoped policy is
+bootstrapped. **Do not invoke the existing `deploy.sh`: it
 contains a hard-coded production S3 sync with `--delete`.** Do not reuse its
 production target for this staging check.

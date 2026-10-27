@@ -1,5 +1,11 @@
 # CloudFront Deployment Guide
 
+> **Legacy reference, not the staging procedure.** For isolated staging use only
+> [the manual staging publisher and infrastructure contract](docs/staging-frontend.md).
+> Do not run the public-bucket setup, public-read policy, delete-sync commands,
+> global API error rewrites, or legacy `deploy.sh` below for staging. The new
+> staging bucket is private, versioned, OAC-only, and never delete-synced.
+
 This guide explains how to deploy the Bridge Game application to AWS CloudFront with an S3 origin bucket.
 
 ## Prerequisites

@@ -10,6 +10,7 @@ The frontend now uses personalized, authoritative server snapshots for bidding, 
 - [Account signup, login, refresh, logout and verification](docs/authentication.md)
 - [Implementation backlog and release gates](docs/implementation-backlog.md)
 - [Frontend readiness, exact validation commands, and browser evidence](docs/frontend-readiness.md)
+- [Isolated manual staging frontend publication and infrastructure contract](docs/staging-frontend.md)
 
 Live play requires the signed `/api/auth/guest` bootstrap (or account login), authenticated WebSocket connection, and `getGameState` / `nextBoard` routes described in those documents. Unsupported routes produce errors rather than locally simulated success.
 

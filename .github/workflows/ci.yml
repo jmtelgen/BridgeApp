@@ -35,6 +35,8 @@ jobs:
           cache: 'npm'
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
+      - name: Test isolated staging deployment guards (no AWS calls)
+        run: node --test deployment/staging-web.test.mjs
       - name: Run selected frontend regression tests (not the full historical suite)
         run: >-
           npx --no-install vitest run --config vitest.config.ts

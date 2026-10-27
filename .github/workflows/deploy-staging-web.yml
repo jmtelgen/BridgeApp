@@ -1,0 +1,92 @@
+name: Manual isolated staging frontend publication
+
+on:
+  workflow_dispatch:
+    inputs:
+      backend_release_ref:
+        description: Full commit SHA of the backend release already deployed to staging
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: bridgeapp-staging-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'jmtelgen/BridgeApp' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_STAGING_ROLE_ARN: ${{ vars.AWS_STAGING_ROLE_ARN }}
+      STAGING_WEB_BUCKET: ${{ vars.STAGING_WEB_BUCKET }}
+      STAGING_DISTRIBUTION_ID: ${{ vars.STAGING_DISTRIBUTION_ID }}
+      STAGING_WEBSOCKET_URL: ${{ vars.STAGING_WEBSOCKET_URL }}
+      STAGING_ORIGIN: ${{ vars.STAGING_ORIGIN }}
+      BACKEND_RELEASE_REF: ${{ inputs.backend_release_ref }}
+      AWS_EC2_METADATA_DISABLED: 'true'
+      AWS_PAGER: ''
+      NX_DAEMON: 'false'
+      NX_NO_CLOUD: 'true'
+      CYPRESS_INSTALL_BINARY: '0'
+    steps:
+      - name: Check out approved main source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Validate isolated staging configuration before OIDC
+        run: |
+          node deployment/staging-web.mjs validate
+          node --input-type=module -e 'if (!/^[a-f0-9]{40}$/.test(process.env.BACKEND_RELEASE_REF || "")) throw new Error("Provide the deployed backend full commit SHA")'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Test release guards
+        run: node --test deployment/staging-web.test.mjs
+      - name: Run frontend regressions
+        run: >-
+          npx --no-install vitest run --config vitest.config.ts
+          tests/frontend
+          tests/components/Room.test.tsx
+          tests/components/userStore.test.ts
+          tests/components/gameStore.test.ts
+      - name: Check application TypeScript
+        run: npx --no-install tsc --noEmit -p tsconfig.app.json
+      - name: Build staging without production endpoint fallback
+        run: npx --no-install vite build --mode staging
+      - name: Validate built assets
+        run: node --input-type=module -e 'import { buildManifest } from "./deployment/staging-web.mjs"; buildManifest("dist/TestProject")'
+      - name: Retain exact frontend artifact
+        id: artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: staging-web-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/TestProject/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Assume dedicated staging role through OIDC
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_STAGING_ROLE_ARN }}
+          role-session-name: BridgeApp-staging-${{ github.run_id }}
+          role-duration-seconds: 1800
+          allowed-account-ids: '851725597758'
+          unset-current-credentials: true
+          mask-aws-account-id: false
+      - name: Verify isolated resources then publish assets and entry last
+        env:
+          ARTIFACT_DIGEST: ${{ steps.artifact.outputs.artifact-digest }}
+        run: node deployment/staging-web.mjs publish
