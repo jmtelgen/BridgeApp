@@ -4,6 +4,11 @@
 
 This is a publishing/bootstrap step, **not an application deployment**.
 
+The bootstrap PR is merged. The operator completed the identity check on
+`main`: [successful run](https://github.com/jmtelgen/BridgeApp/actions/runs/40425971190).
+The temporary bootstrap branch has been deleted and its staging environment
+allowance removed. Access checks are restricted to `main`.
+
 - `.github/workflows/ci.yml` runs frontend validation for pull requests, pushes
   to `main`, and manual dispatch. It uses Node.js 22, `npm ci`, selected Vitest
   regressions, application TypeScript checking, and the Nx production build.
@@ -83,8 +88,7 @@ this trust policy.
 
 In `jmtelgen/BridgeApp` → **Settings → Environments → staging**:
 
-1. Restrict deployment branches/tags to selected **branches** `main` and
-   `deployment/github-staging-bootstrap` (bootstrap only), not arbitrary
+1. Restrict deployment branches/tags to the selected **branch** `main`, not arbitrary
    branches or tags. Add a required reviewer where the repository plan supports
    it. Keep branch protection/review on these workflow changes.
 2. Set environment **variables**, not access-key secrets:
@@ -100,9 +104,9 @@ In `jmtelgen/BridgeApp` → **Settings → Environments → staging**:
 3. Do not add `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, or root credentials.
    The workflow clears ambient AWS credentials before obtaining its short-lived
    OIDC role session. It requests a 15-minute role session.
-4. After bootstrap, remove `deployment/github-staging-bootstrap` from the
-   environment branch rules and remove its allowance in the workflow job
-   condition, leaving only `main`.
+4. Keep both the environment branch rules and the workflow job condition
+   restricted to `main`. Deleting a Git branch does not remove its environment
+   allowance automatically.
 
 The workflow rejects missing variables, any unexpected account/region/role ARN,
 root identity, or an unexpected STS account/assumed-role identity. STS output is
