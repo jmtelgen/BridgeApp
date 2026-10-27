@@ -2,15 +2,26 @@
 
 A modern, real-time Bridge card game built with React, TypeScript, and Vite. This application allows players to join game rooms and play Bridge together in a web browser.
 
+## Implementation status
+
+The frontend now uses personalized, authoritative server snapshots for bidding, play, dummy control, results, reconnect, and the next board. Computer turns run on the server, not in the browser. A responsive felt-table interface and mocked Chromium smoke tests are implemented; this is **not a claim of a deployed or staging-verified service**.
+
+- [Architecture and integration contracts](docs/architecture.md)
+- [Account signup, login, refresh, logout and verification](docs/authentication.md)
+- [Implementation backlog and release gates](docs/implementation-backlog.md)
+- [Frontend readiness, exact validation commands, and browser evidence](docs/frontend-readiness.md)
+
+Live play requires the signed `/api/auth/guest` bootstrap (or account login), authenticated WebSocket connection, and `getGameState` / `nextBoard` routes described in those documents. Unsupported routes produce errors rather than locally simulated success.
+
 ## 🎮 Features
 
 - **Real-time Gameplay**: Multiplayer Bridge game with live updates
 - **Room Management**: Create and join game rooms with unique IDs
-- **User Management**: Automatic user ID generation and persistence
-- **AI/Robot Players**: Built-in AI for bidding and playing
+- **User Management**: Signed account or server-issued guest sessions
+- **AI/Robot Players**: Server-owned bidding and playing
 - **Serverless Backend**: Powered by AWS Lambda and DynamoDB
 - **Modern UI**: Built with React, Tailwind CSS, and Radix UI components
-- **Responsive Design**: Works seamlessly on desktop and mobile devices
+- **Responsive Design**: Chromium smoke-tested at 360px and desktop widths; broader device testing remains a release gate
 - **Type Safety**: Full TypeScript support for better development experience
 
 ## 🛠️ Tech Stack
@@ -49,6 +60,10 @@ npm install
 ### 3. Build Configuration
 
 This project is configured to run without Nx Cloud (offline mode). If you encounter any Nx Cloud connection errors, the configuration is already set to disable cloud features.
+
+For a real, AWS-free local game, use the [local adapter and frontend commands](docs/frontend-readiness.md#local-development-first-without-aws).
+Set `VITE_API_BASE_URL` and `VITE_WS_ENDPOINT` for those local services.
+Running the UI alone does not invent a game server or fall back to AWS.
 
 ### 4. Start Development Server
 

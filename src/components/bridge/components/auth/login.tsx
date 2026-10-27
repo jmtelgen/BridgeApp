@@ -15,8 +15,9 @@ import { userAuthService, type LoginRequest } from "../../../../services/userAut
 // Utility function to refresh access token using refresh token
 export const refreshAccessToken = async (onTokenRefresh?: (newToken: string) => void): Promise<string | null> => {
   try {
-    const response = await userAuthService.refreshToken()
-          const newAccessToken = response.accessToken
+    if (!(await useUserStore.getState().attemptTokenRefresh())) return null
+    const newAccessToken = useUserStore.getState().accessToken
+    if (!newAccessToken) return null
     
     // Call the callback to update the token in the user store
     if (onTokenRefresh) {
@@ -25,7 +26,6 @@ export const refreshAccessToken = async (onTokenRefresh?: (newToken: string) => 
     
     return newAccessToken
   } catch (error) {
-    console.error('Token refresh failed:', error)
     return null
   }
 }
@@ -60,7 +60,6 @@ export default function LoginPage() {
       navigate("/")
       
     } catch (error) {
-      console.error('Login error:', error)
       setError(error instanceof Error ? error.message : 'Login failed. Please try again.')
     } finally {
       setIsLoading(false)
@@ -102,6 +101,7 @@ export default function LoginPage() {
                 </Label>
                 <Input
                   id="username"
+                  autoComplete="username"
                   type="text"
                   placeholder="Enter your username"
                   value={username}
@@ -118,6 +118,7 @@ export default function LoginPage() {
                 <div className="relative">
                   <Input
                     id="password"
+                    autoComplete="current-password"
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
                     value={password}
@@ -131,6 +132,7 @@ export default function LoginPage() {
                     size="sm"
                     className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-700"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4 text-gray-600 dark:text-gray-400" />
@@ -142,7 +144,7 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <p className="text-red-500 text-sm text-center">{error}</p>
+                <p role="alert" className="text-red-500 text-sm text-center">{error}</p>
               )}
 
               <Button

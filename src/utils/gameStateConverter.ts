@@ -1,309 +1,161 @@
-import { 
-  PrivateGameState, 
-  SeatBasedGameResponse, 
-  GameData, 
-  Position, 
+import {
+  PrivateGameState,
+  SeatBasedGameResponse,
+  GameData,
+  Position,
   PlayingCard,
   Bid,
   Trick,
   Suit,
-  Rank
+  Rank,
 } from '../components/bridge/types'
-import { 
-  getFrontendToServerPositionMap,
-  getEmptyPositionObject
-} from './positionUtils'
 
-// Convert server card string (e.g., "AH") to frontend PlayingCard object
-export const convertServerCardToFrontend = (cardString: string): PlayingCard => {
-  let rank: string
-  let suitChar: string
-  
-  if (cardString.startsWith('T')) {
-    rank = '10'
-    suitChar = cardString.slice(1) // Take everything after "T"
-  } else {
-    rank = cardString.slice(0, -1)
-    suitChar = cardString.slice(-1)
-  }
-  
-  const suitMap: Record<string, string> = { D: '♦', C: '♣', H: '♥', S: '♠' }
-  const suit = suitMap[suitChar] || suitChar
-  const valueMap: Record<string, number> = { 
-    'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10, 
-    '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2 
-  }
-  const value = valueMap[rank] || parseInt(rank)
-  
-  return { suit: suit as Suit, rank: rank as Rank, value }
+const positions: Position[] = ['North', 'East', 'South', 'West']
+const seat = (value: string | null | undefined): Position | null =>
+  positions.includes(value as Position) ? (value as Position) : null
+const suits: Record<string, Suit | 'NT'> = {
+  C: '♣',
+  D: '♦',
+  H: '♥',
+  S: '♠',
+  NT: 'NT',
 }
-
-// Convert frontend PlayingCard object to server card string
-export const convertFrontendCardToServer = (card: PlayingCard): string => {
-  const suitMap: Record<string, string> = { '♦': 'D', '♣': 'C', '♥': 'H', '♠': 'S' }
-  const rankMap: Record<string, string> = { 
-    'A': 'A', 'K': 'K', 'Q': 'Q', 'J': 'J', 
-    '10': 'T', '9': '9', '8': '8', '7': '7', 
-    '6': '6', '5': '5', '4': '4', '3': '3', '2': '2' 
-  }
-  
-  const suit = suitMap[card.suit] || card.suit
-  const rank = rankMap[card.rank] || card.rank
-  
-  return rank + suit
-}
-
-// Convert server bid string to frontend Bid object
-export const convertServerBidToFrontend = (bidString: string, seat: string): Bid => {
-  // Server now returns full position names, so we can use the seat directly
-  const frontendSeat = (seat === 'North' || seat === 'South' || seat === 'East' || seat === 'West') 
-    ? seat as Position 
-    : 'North'
-  
-  let bidType: 'Pass' | 'Double' | 'Redouble' | 'Bid' = 'Pass'
-  let level: number | undefined
-  let suit: string | undefined
-  
-  if (bidString === 'pass') {
-    bidType = 'Pass'
-  } else if (bidString === 'double') {
-    bidType = 'Double'
-  } else if (bidString === 'redouble') {
-    bidType = 'Redouble'
-  } else {
-    // Parse bid like "4H" -> level: 4, suit: "♥"
-    const match = bidString.match(/^(\d+)([CDHSNT]+)$/)
-    if (match) {
-      level = parseInt(match[1])
-      const suitChar = match[2]
-      const suitMap: Record<string, string> = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' }
-      suit = suitMap[suitChar] || suitChar
-      bidType = 'Bid'
-    }
-  }
-  
+export const convertServerCardToFrontend = (value: string): PlayingCard => {
+  if (!/^[2-9TJQKA][CDHS]$/.test(value))
+    throw new Error(`Invalid card: ${value}`)
+  const rank = (value[0] === 'T' ? '10' : value[0]) as Rank
   return {
-    type: bidType,
-    level: bidType === 'Bid' ? level! : bidType,
-    suit: bidType === 'Bid' ? (suit as Suit | "NT") : undefined,
-    player: frontendSeat
+    rank,
+    suit: suits[value[1]] as Suit,
+    value: { A: 14, K: 13, Q: 12, J: 11, T: 10 }[value[0]] || Number(value[0]),
   }
 }
+export const convertFrontendCardToServer = (card: PlayingCard): string =>
+  (card.rank === '10' ? 'T' : card.rank) +
+  { '♣': 'C', '♦': 'D', '♥': 'H', '♠': 'S' }[card.suit]
 
-// Convert server contract string to frontend contract object
-export const convertServerContractToFrontend = (contractString: string, declarer: string): {
-  level: number
-  suit: Suit | "NT"
-  declarer: Position
-  doubled: boolean
-  redoubled: boolean
-} | null => {
-  if (!contractString) return null
-  
-  const match = contractString.match(/^(\d+)([CDHSNT]+)$/)
-  if (!match) return null
-  
-  const level = parseInt(match[1])
-  const suitChar = match[2]
-  const suitMap: Record<string, string> = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' }
-  const suit = suitMap[suitChar] || suitChar
-  
-  // Server now returns full position names, so we can use the declarer directly
-  const frontendDeclarer = (declarer === 'North' || declarer === 'South' || declarer === 'East' || declarer === 'West') 
-    ? declarer as Position 
-    : 'North'
-  
+export const convertServerBidToFrontend = (
+  value: string,
+  player: string
+): Bid => {
+  const type =
+    value === 'pass'
+      ? 'Pass'
+      : value === 'double'
+      ? 'Double'
+      : value === 'redouble'
+      ? 'Redouble'
+      : 'Bid'
+  const match = /^([1-7])(C|D|H|S|NT)$/.exec(value)
+  if (type === 'Bid' && !match) throw new Error(`Invalid bid: ${value}`)
   return {
-    level,
-    suit: suit as Suit | "NT",
-    declarer: frontendDeclarer as Position,
-    doubled: false,
-    redoubled: false
+    type,
+    level: match ? Number(match[1]) : (type as 'Pass' | 'Double' | 'Redouble'),
+    suit: match ? suits[match[2]] : undefined,
+    player: seat(player) || 'North',
   }
 }
-
-// Convert server currentTrick array to frontend Trick object
-export const convertServerTrickToFrontend = (trickArray: any[]): Trick => {
-  const convertedTrick: Trick = {
-    cards: getEmptyPositionObject(null),
-    winner: null,
+export const convertServerContractToFrontend = (
+  value: string,
+  declarer: string,
+  multiplier = 1
+): GameData['contract'] => {
+  const match = /^([1-7])(C|D|H|S|NT)(XX|X)?$/.exec(value)
+  if (!match || !seat(declarer)) return null
+  const factor = match[3] === 'XX' ? 4 : match[3] === 'X' ? 2 : multiplier
+  return {
+    level: Number(match[1]),
+    suit: suits[match[2]],
+    declarer: declarer as Position,
+    doubled: factor === 2,
+    redoubled: factor === 4,
+  }
+}
+export const convertServerTrickToFrontend = (input: any): Trick => {
+  const plays = Array.isArray(input) ? input : input?.plays || []
+  const trick: Trick = {
+    cards: { North: null, East: null, South: null, West: null },
+    winner: seat(input?.winner),
+    trickLeader: seat(input?.leader || plays[0]?.seat),
     ledSuit: null,
-    trickLeader: null
   }
-  
-  if (trickArray.length > 0) {
-    // Find the first card played to determine ledSuit and trickLeader
-    const firstCard = trickArray[0]
-    if (firstCard && firstCard.seat && firstCard.card) {
-      // Server now returns full position names, so we can use the seat directly
-      const frontendSeat = (firstCard.seat === 'North' || firstCard.seat === 'South' || firstCard.seat === 'East' || firstCard.seat === 'West') 
-        ? firstCard.seat as Position 
-        : 'North'
-      convertedTrick.trickLeader = frontendSeat
-      
-      // Extract suit from card (e.g., "AH" -> "♥")
-      const cardString = firstCard.card
-      let suit: string
-      if (cardString.endsWith('H')) suit = '♥'
-      else if (cardString.endsWith('S')) suit = '♠'
-      else if (cardString.endsWith('D')) suit = '♦'
-      else if (cardString.endsWith('C')) suit = '♣'
-      else suit = 'NT'
-      
-      convertedTrick.ledSuit = suit as Suit
-      
-      // Convert all cards in the trick
-      trickArray.forEach((trickCard: any) => {
-        if (trickCard.seat && trickCard.card) {
-          // Server now returns full position names, so we can use the seat directly
-          const frontendSeat = (trickCard.seat === 'North' || trickCard.seat === 'South' || trickCard.seat === 'East' || trickCard.seat === 'West') 
-            ? trickCard.seat as Position 
-            : 'North'
-          const card = convertServerCardToFrontend(trickCard.card)
-          convertedTrick.cards[frontendSeat as keyof typeof convertedTrick.cards] = card
-        }
-      })
-    }
+  for (const play of plays) {
+    const position = seat(play.seat)
+    if (position && play.card)
+      trick.cards[position] = convertServerCardToFrontend(play.card)
   }
-  
-  return convertedTrick
+  if (plays[0]?.card)
+    trick.ledSuit = convertServerCardToFrontend(plays[0].card).suit
+  return trick
 }
+export const convertServerVulnerabilityToFrontend = (
+  value: string
+): GameData['vulnerability'] => ({
+  NS: value === 'NS' || value === 'Both',
+  EW: value === 'EW' || value === 'Both',
+})
+export const convertServerPhaseToFrontend = (
+  phase: string
+): 'bidding' | 'playing' | 'completed' =>
+  phase === 'playing' || phase === 'completed' ? phase : 'bidding'
+export const convertServerTurnToFrontendPosition = (
+  value: string,
+  _seats: Record<string, string>
+): Position => seat(value) || 'North'
 
-// Convert server vulnerability string to frontend format
-export const convertServerVulnerabilityToFrontend = (vulnerability: string): { NS: boolean, EW: boolean } => {
-  switch (vulnerability) {
-    case 'NS':
-      return { NS: true, EW: false }
-    case 'EW':
-      return { NS: false, EW: true }
-    case 'Both':
-      return { NS: true, EW: true }
-    default:
-      return { NS: false, EW: false }
-  }
-}
-
-// Convert server phase string to frontend GamePhase
-export const convertServerPhaseToFrontend = (phase: string): 'bidding' | 'playing' | 'completed' => {
-  const phaseMap: Record<string, 'bidding' | 'playing' | 'completed'> = {
-    'waiting': 'bidding',
-    'bidding': 'bidding',
-    'playing': 'playing',
-    'completed': 'completed'
-  }
-  return phaseMap[phase] || 'bidding'
-}
-
-// Convert server turn position to frontend position
-export const convertServerTurnToFrontendPosition = (turnPosition: string, seats: Record<string, string>): Position => {
-  console.log('Converting server turn position to frontend position:', { turnPosition, seats })
-  
-  // The server now sends positions directly (e.g., "North", "South", "East", "West")
-  // Since the server and frontend use the same format, we can use it directly
-  if (turnPosition === 'North' || turnPosition === 'South' || turnPosition === 'East' || turnPosition === 'West') {
-    console.log('Using server position directly:', turnPosition)
-    return turnPosition as Position
-  }
-  
-  // If we couldn't find a valid position, default to North
-  console.log('No valid position found for turn position:', turnPosition, 'defaulting to North')
-  return 'North'
-}
-
-// Main conversion function: SeatBasedGameResponse -> GameData
 export const convertSeatBasedResponseToGameData = (
   response: SeatBasedGameResponse,
-  seats: Record<string, string>,
+  _seats: Record<string, string>,
   currentPlayerPosition: Position
 ): GameData => {
-  const { publicState, privateState, lastAction } = response
-  
-  // Convert hands - only include the current player's hand and dummy hand if applicable
-  const hands: Record<Position, PlayingCard[]> = {
-    North: [],
-    East: [],
-    South: [],
-    West: []
-  }
-  
-  // Add current player's hand
-  const currentPlayerHand = privateState.hand.map(convertServerCardToFrontend)
-  hands[currentPlayerPosition] = currentPlayerHand
-  
-  // Add dummy hand if in playing phase and dummy exists
-  if (publicState.currentPhase === 'playing' && publicState.dummy && publicState.dummyHand) {
-    // Server now returns full position names, so we can use the dummy position directly
-    const dummyPosition = (publicState.dummy === 'North' || publicState.dummy === 'South' || publicState.dummy === 'East' || publicState.dummy === 'West') 
-      ? publicState.dummy as Position 
-      : 'North'
-    const dummyHand = publicState.dummyHand.map(convertServerCardToFrontend)
-    hands[dummyPosition] = dummyHand
-  }
-  
-  // Convert bids
-  const bids: Bid[] = publicState.bids.map((bid: any) => 
-    convertServerBidToFrontend(bid.bid, bid.seat)
-  )
-  
-  // Convert current trick
-  const currentTrick = publicState.currentTrick 
-    ? convertServerTrickToFrontend(publicState.currentTrick)
-    : {
-        cards: getEmptyPositionObject(null),
-        winner: null,
-        ledSuit: null,
-        trickLeader: null
-      }
-  
-  // Convert contract
-  const contract = publicState.contract && publicState.declarer
-    ? convertServerContractToFrontend(publicState.contract, publicState.declarer)
-    : null
-  
-  // Convert dummy position
-  const dummy = publicState.dummy ? 
-    ((publicState.dummy === 'North' || publicState.dummy === 'South' || publicState.dummy === 'East' || publicState.dummy === 'West') 
-      ? publicState.dummy as Position 
-      : null) 
-    : null
-  
-  // Convert vulnerability
-  const vulnerability = convertServerVulnerabilityToFrontend(publicState.vulnerability)
-  
-  // Convert dealer
-  const dealer = (publicState.dealer === 'North' || publicState.dealer === 'South' || publicState.dealer === 'East' || publicState.dealer === 'West') 
-    ? publicState.dealer as Position 
-    : 'North'
-  
-  // Convert current player - always use the turn string from the server
-  let currentPlayer: Position
-  if (publicState.turn) {
-    currentPlayer = publicState.turn as Position
-    console.log('Using turn from publicState:', publicState.turn, '->', currentPlayer)
-  } else {
-    // Default fallback if no turn information is available
-    currentPlayer = 'North'
-    console.log('No turn information found, defaulting to North')
-  }
-  
+  const { publicState: state, privateState: mine } = response
+  const hands: GameData['hands'] = { North: [], East: [], South: [], West: [] }
+  const ownSeat = seat(mine.seat) || currentPlayerPosition
+  hands[ownSeat] = (mine.hand || []).map(convertServerCardToFrontend)
+  const dummy = seat(state.dummy)
+  if (dummy && state.dummyHand)
+    hands[dummy] = state.dummyHand.map(convertServerCardToFrontend)
+  const tricks = (state.tricks || []).map(convertServerTrickToFrontend)
+  const contract =
+    state.contract && state.declarer
+      ? convertServerContractToFrontend(
+          state.contract,
+          state.declarer,
+          state.contractMultiplier
+        )
+      : null
   return {
-    phase: convertServerPhaseToFrontend(publicState.currentPhase),
-    currentPlayer: currentPlayer as Position,
-    dealer: dealer as Position,
-    bids,
+    phase: convertServerPhaseToFrontend(state.currentPhase),
+    currentPlayer: seat(state.turn) || ownSeat,
+    dealer: seat(state.dealer) || 'North',
+    bids: (state.bids || []).map((bid) =>
+      convertServerBidToFrontend(bid.bid, bid.seat)
+    ),
     hands,
-    currentTrick,
-    tricks: publicState.tricks || [],
-    previousTrick: publicState.previousTrick ? convertServerTrickToFrontend(publicState.previousTrick) : null,
+    currentTrick: convertServerTrickToFrontend(state.currentTrick),
+    tricks,
+    previousTrick: state.previousTrick
+      ? convertServerTrickToFrontend(state.previousTrick)
+      : null,
+    completedTrick: state.completedTrick
+      ? convertServerTrickToFrontend(state.completedTrick)
+      : null,
+    scheduledAction: state.pendingAction || null,
+    serverTimeMs: state.serverTimeMs,
     contract,
-    dummy: dummy as Position | null,
-    firstCardPlayed: !!(publicState.currentTrick && publicState.currentTrick.length > 0),
-    gameNumber: 1, // This might need to come from somewhere else
-    vulnerability
+    dummy,
+    firstCardPlayed: state.dummyHand != null,
+    gameNumber: state.boardNumber || 1,
+    vulnerability: convertServerVulnerabilityToFrontend(state.vulnerability),
+    validBids: mine.validBids || [],
+    legalCards: mine.legalCards || [],
+    playSeat: mine.playSeat || null,
+    isMyTurn: mine.isMyTurn,
+    handCounts: state.handCounts || {},
+    revision: state.revision,
+    result: state.result || null,
+    scores: state.scores,
   }
 }
-
-// Helper function to check if it's the current player's turn
-export const isCurrentPlayerTurn = (privateState: PrivateGameState): boolean => {
-  return privateState.isMyTurn
-}
+export const isCurrentPlayerTurn = (state: PrivateGameState): boolean =>
+  state.isMyTurn

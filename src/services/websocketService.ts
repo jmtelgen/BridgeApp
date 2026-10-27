@@ -1,7 +1,7 @@
-
 import { websocketConfig, WebSocketActions } from '../config/websocket'
 import { BidType, Suit } from '../components/bridge/types'
-import { getCurrentUserId, getCurrentPlayerName } from '../utils/userUtils'
+import { ensureGameSession } from './gameSessionService'
+import { useUserStore } from '../stores/userStore'
 
 export interface WebSocketMessage {
   action: string
@@ -10,432 +10,361 @@ export interface WebSocketMessage {
   userId?: string
   timestamp?: number
 }
-
 export interface WebSocketResponse {
   action: string
-  success: boolean
+  success?: boolean
   error?: string
   room?: any
   assignedSeat?: string
   gameState?: any
   message?: string
+  [key: string]: any
 }
+type Handler = (data: any) => void
 
-export interface GameAction {
-  type: 'bid' | 'play' | 'pass' | 'double' | 'redouble'
-  data?: any
-  playerId: string
-  roomId: string
-}
-
-export interface RoomAction {
-  type: 'create' | 'join' | 'leave' | 'start_game'
-  data?: any
-  userId: string
-  roomId?: string
-}
-
-class WebSocketService {
+export class WebSocketService {
   private ws: WebSocket | null = null
-  private reconnectAttempts = 0
-  private maxReconnectAttempts = websocketConfig.reconnectAttempts
-  private reconnectDelay = websocketConfig.reconnectDelay
-  private messageHandlers: Map<string, (data: any) => void> = new Map()
+  private handlers = new Map<string, Set<Handler>>()
   private connectionPromise: Promise<void> | null = null
-  private isConnecting = false
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private reconnectAttempts = 0
+  private intentionalClose = false
+  private pending = new Set<(error: Error) => void>()
+  private generation = 0
+  private authTimer: ReturnType<typeof setTimeout> | null = null
 
-  // AWS API Gateway WebSocket endpoint
-  private wsEndpoint = websocketConfig.endpoint
-
-  /**
-   * Connect to WebSocket
-   */
-  async connect(): Promise<void> {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      return Promise.resolve()
-    }
-
-    if (this.isConnecting && this.connectionPromise) {
-      return this.connectionPromise
-    }
-
-    this.isConnecting = true
-    this.connectionPromise = new Promise((resolve, reject) => {
-      try {
-        const wsUrl = this.getWebSocketUrl()
-        this.ws = new WebSocket(wsUrl)
-
-        this.ws.onopen = () => {
+  connect(): Promise<void> {
+    if (!websocketConfig.endpoint)
+      return Promise.reject(
+        new Error(
+          'Game server is not configured. Set VITE_WS_ENDPOINT before connecting.'
+        )
+      )
+    if (this.isConnected()) return Promise.resolve()
+    if (this.connectionPromise) return this.connectionPromise
+    this.intentionalClose = false
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
+    this.reconnectTimer = null
+    const generation = ++this.generation
+    const promise = ensureGameSession().then((session) => {
+      if (generation !== this.generation || this.intentionalClose)
+        throw new Error('Connection cancelled')
+      return new Promise<void>((resolve, reject) => {
+        const socket = new WebSocket(websocketConfig.endpoint, [
+          'bridge.v1',
+          `bridge.auth.${session.accessToken}`,
+        ])
+        this.ws = socket
+        const timeout = setTimeout(() => {
+          reject(new Error('Connection timed out'))
+          socket.close()
+        }, 10000)
+        socket.onopen = () => {
+          clearTimeout(timeout)
           this.reconnectAttempts = 0
-          this.isConnecting = false
+          this.connectionPromise = null
+          this.authTimer = setTimeout(() => {
+            this.reconnect().catch(() => {})
+          }, Math.max(1000, session.expiresAt - Date.now() - 60000))
           resolve()
+          this.emit('connection', { connected: true })
         }
-
-        this.ws.onmessage = (event) => {
-          this.handleMessage(event.data).catch(error => {
-            console.error('Error handling WebSocket message:', error)
-          })
+        socket.onmessage = ({ data }) => {
+          try {
+            const message = JSON.parse(data)
+            this.emit(message.action, message)
+            if (message.error) {
+              import('../stores/errorStore').then(({ useErrorStore }) =>
+                useErrorStore.getState().showError(message.error)
+              )
+            }
+          } catch (error) {
+            console.error('Invalid server message', error)
+          }
         }
-
-        this.ws.onclose = (event) => {
-          this.isConnecting = false
-          this.handleDisconnect().catch(error => {
-            console.error('Error handling WebSocket disconnect:', error)
-          })
+        socket.onerror = () => {
+          clearTimeout(timeout)
+          reject(new Error('Cannot connect to the game server'))
+          socket.close()
         }
-
-        this.ws.onerror = (error) => {
-          console.error('WebSocket error:', error)
-          this.isConnecting = false
-          reject(error)
+        socket.onclose = () => {
+          clearTimeout(timeout)
+          reject(new Error('Connection closed'))
+          if (this.ws !== socket) return
+          if (this.authTimer) clearTimeout(this.authTimer)
+          this.authTimer = null
+          this.ws = null
+          this.connectionPromise = null
+          this.pending.forEach((cancel) =>
+            cancel(new Error('Connection lost. Reconnect before trying again.'))
+          )
+          this.emit('connection', { connected: false })
+          if (
+            !this.intentionalClose &&
+            this.reconnectAttempts < websocketConfig.reconnectAttempts
+          ) {
+            this.reconnectAttempts += 1
+            this.reconnectTimer = setTimeout(() => {
+              this.reconnectTimer = null
+              this.connect().catch(() => {})
+            }, websocketConfig.reconnectDelay * this.reconnectAttempts)
+          }
         }
-
-      } catch (error) {
-        this.isConnecting = false
-        reject(error)
+      })
+    })
+    this.connectionPromise = promise
+    promise.catch((error) => {
+      if (this.connectionPromise === promise) {
+        this.connectionPromise = null
+        this.emit('connection', {
+          connected: false,
+          error:
+            error instanceof Error ? error.message : 'Authentication failed',
+        })
       }
     })
-
-    return this.connectionPromise
+    return promise
   }
 
-  /**
-   * Disconnect from WebSocket
-   */
   disconnect(): void {
-    if (this.ws) {
-      this.ws.close(1000, 'Client disconnect')
-      this.ws = null
-    }
-    this.isConnecting = false
+    this.intentionalClose = true
+    this.generation += 1
+    if (this.authTimer) clearTimeout(this.authTimer)
+    this.authTimer = null
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
+    this.reconnectTimer = null
+    this.pending.forEach((cancel) => cancel(new Error('Disconnected')))
+    this.ws?.close(1000, 'Client disconnect')
+    this.ws = null
     this.connectionPromise = null
+    this.emit('connection', { connected: false })
   }
 
-  /**
-   * Send message to WebSocket
-   */
+  reconnect(): Promise<void> {
+    this.disconnect()
+    return this.connect()
+  }
+
   async sendMessage(message: WebSocketMessage): Promise<void> {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      await this.connect()
-    }
-
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      const messageString = JSON.stringify(message)
-      this.ws.send(messageString)
-    } else {
-      throw new Error('WebSocket is not connected')
-    }
+    await this.connect()
+    if (!this.isConnected()) throw new Error('WebSocket is not connected')
+    this.ws!.send(JSON.stringify(message))
   }
 
-  /**
-   * Handle incoming messages
-   */
-  private async handleMessage(data: string): Promise<void> {
-    try {
-      const message: WebSocketResponse = JSON.parse(data)
-
-      const handler = this.messageHandlers.get(message.action)
-      if (handler) {
-        handler(message)
+  /** Register before sending: local mocks and fast servers may respond synchronously. */
+  request(
+    message: WebSocketMessage,
+    actions: string[],
+    matches: (data: WebSocketResponse) => boolean = () => true,
+    signal?: AbortSignal
+  ): Promise<WebSocketResponse> {
+    return new Promise((resolve, reject) => {
+      const disposers: (() => void)[] = []
+      let settled = false
+      const cleanup = () => {
+        settled = true
+        clearTimeout(timer)
+        disposers.forEach((dispose) => dispose())
+        this.pending.delete(cancel)
+        signal?.removeEventListener('abort', abort)
       }
-
-      // Handle errors
-      if (!message.success && message.error) {
-        const { useErrorStore } = await import('../stores/errorStore')
-        useErrorStore.getState().showError(message.error)
+      const cancel = (error: Error) => {
+        if (settled) return
+        cleanup()
+        reject(error)
       }
-
-    } catch (error) {
-      console.error('Error parsing WebSocket message:', error)
-    }
-  }
-
-  /**
-   * Handle disconnect and attempt reconnection
-   */
-  private async handleDisconnect(): Promise<void> {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++
-      
-      setTimeout(() => {
-        this.connect().catch(error => {
-          console.error('Reconnection failed:', error)
+      const abort = () => cancel(new Error('Request cancelled'))
+      const timer = setTimeout(
+        () =>
+          cancel(
+            new Error(
+              `${message.action} timed out. The server did not confirm the request.`
+            )
+          ),
+        12000
+      )
+      this.pending.add(cancel)
+      signal?.addEventListener('abort', abort, { once: true })
+      if (signal?.aborted) {
+        abort()
+        return
+      }
+      for (const action of new Set([...actions, 'error'])) {
+        disposers.push(
+          this.onMessage(action, (data) => {
+            if (settled || !matches(data)) return
+            cleanup()
+            if (data.success === false || data.error)
+              reject(
+                new Error(data.error || data.message || 'Request rejected')
+              )
+            else resolve(data)
+          })
+        )
+      }
+      this.connect()
+        .then(() => {
+          if (!settled) return this.sendMessage(message)
         })
-      }, this.reconnectDelay * this.reconnectAttempts)
-    } else {
-      const { useErrorStore } = await import('../stores/errorStore')
-      useErrorStore.getState().showError('Lost connection to game server. Please refresh the page.')
+        .catch(cancel)
+    })
+  }
+
+  private emit(action: string, data: any): void {
+    for (const handler of [...(this.handlers.get(action) || [])]) {
+      try {
+        handler(data)
+      } catch (error) {
+        console.error('Message listener failed', error)
+      }
     }
   }
 
-  /**
-   * Get WebSocket URL with query parameters
-   */
-  private getWebSocketUrl(): string {
-    // Get user info for query parameters
-    const userId = getCurrentUserId()
-    const playerName = getCurrentPlayerName()
-
-    // Build WebSocket URL with query parameters
-    let wsUrl = this.wsEndpoint
-    if (userId || playerName) {
-      const params = new URLSearchParams()
-      if (userId) params.append('userId', userId)
-      if (playerName) params.append('userName', playerName)
-      wsUrl = `${this.wsEndpoint}?${params.toString()}`
-    }
-
-    return wsUrl
+  onMessage(action: string, handler: Handler): () => void {
+    if (!this.handlers.has(action)) this.handlers.set(action, new Set())
+    this.handlers.get(action)!.add(handler)
+    return () => this.offMessage(action, handler)
   }
-
-  /**
-   * Register message handler
-   */
-  onMessage(action: string, handler: (data: any) => void): void {
-    this.messageHandlers.set(action, handler)
+  offMessage(action: string, handler?: Handler): void {
+    if (!handler) return
+    this.handlers.get(action)?.delete(handler)
+    if (!this.handlers.get(action)?.size) this.handlers.delete(action)
   }
-
-  /**
-   * Remove message handler
-   */
-  offMessage(action: string): void {
-    this.messageHandlers.delete(action)
-  }
-
-  /**
-   * Check if WebSocket is connected
-   */
   isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN
   }
-
-  /**
-   * Cleanup room-specific subscriptions and handlers
-   */
-  cleanupRoom(roomId: string): void {
-    // Remove all message handlers for this room
-    this.messageHandlers.forEach((handler, action) => {
-      if (action.includes('game_state') || action.includes('room')) {
-        this.messageHandlers.delete(action)
-      }
-    })
-  }
-
-  /**
-   * Cleanup all subscriptions and handlers
-   */
+  // Subscriptions belong to the caller; leaving one room must not erase another listener.
+  cleanupRoom(_roomId: string): void {}
   cleanupAll(): void {
-    this.messageHandlers.clear()
+    this.pending.forEach((cancel) => cancel(new Error('Subscriptions closed')))
+    this.handlers.clear()
   }
 }
 
-// Create singleton instance
 export const websocketService = new WebSocketService()
+useUserStore.subscribe((state, previous) => {
+  if (
+    (state.isAuthenticated !== previous.isAuthenticated &&
+      (!state.isAuthenticated || !previous.wasAuthenticated)) ||
+    (websocketService.isConnected() && state.userId !== previous.userId) ||
+    (previous.user && state.user && previous.user.userId !== state.user.userId) ||
+    (previous.user !== null && state.user === null)
+  )
+    websocketService.disconnect()
+})
+const roomMatches = (roomId: string) => (data: WebSocketResponse) =>
+  (!data.roomId && !data.room?.roomId) ||
+  (data.roomId || data.room?.roomId) === roomId
 
-// Room Management WebSocket Methods
 export const roomWebSocketService = {
-  /**
-   * Create room via WebSocket
-   */
-  createRoom: async (roomData: {
+  leaveRoom: (roomId: string) =>
+    websocketService.request(
+      { action: 'leaveRoom', data: { roomId } },
+      ['roomLeft'],
+      roomMatches(roomId)
+    ),
+  getGameState: (roomId: string, userId: string, signal?: AbortSignal) =>
+    websocketService.request(
+      { action: 'getGameState', data: { roomId, userId }, roomId, userId },
+      ['gameState'],
+      roomMatches(roomId),
+      signal
+    ),
+  nextBoard: (roomId: string, userId: string, state?: { revision?: number; boardId?: string }) =>
+    websocketService.request(
+      { action: 'nextBoard', data: { roomId, userId, ...state } },
+      ['boardStarted'],
+      roomMatches(roomId)
+    ),
+  createRoom: (data: {
     roomName: string
     isPrivate: boolean
     maxPlayers: number
     playerName: string
     ownerId: string
-  }): Promise<WebSocketResponse> => {
-    const message: WebSocketMessage = {
-      action: WebSocketActions.CREATE_ROOM,
-      data: roomData,
-      userId: roomData.ownerId, // Include userId at top level as well
-      timestamp: Date.now()
-    }
-
-    await websocketService.sendMessage(message)
-    
-    // Wait for the actual response from the server
-    // The server might respond with either CREATE_ROOM or roomUpdated action
-    return new Promise((resolve) => {
-      const createRoomHandler = (data: any) => {
-        websocketService.offMessage(WebSocketActions.CREATE_ROOM)
-        websocketService.offMessage('roomUpdated')
-        resolve(data)
-      }
-      
-      const roomUpdatedHandler = (data: any) => {
-        // Resolve for any roomUpdated message with room data
-        if (data.room && data.updateType === 'roomCreated') {
-          websocketService.offMessage(WebSocketActions.CREATE_ROOM)
-          // Don't remove the roomUpdated handler here - let the event handler keep it
-          resolve(data)
-        }
-      }
-      
-      // Listen for both possible response types
-      websocketService.onMessage(WebSocketActions.CREATE_ROOM, createRoomHandler)
-      websocketService.onMessage('roomUpdated', roomUpdatedHandler)
-      
-      // Add timeout to prevent hanging
-      setTimeout(() => {
-        console.warn('Create room request timed out')
-        websocketService.offMessage(WebSocketActions.CREATE_ROOM)
-        // Don't remove the roomUpdated handler here - let the event handler keep it
-        resolve({
-          action: WebSocketActions.CREATE_ROOM,
-          success: false,
-          error: 'Create room request timed out'
-        })
-      }, 10000) // 10 second timeout
-    })
-  },
-
-  /**
-   * Join room via WebSocket
-   */
-  joinRoom: async (joinData: {
-    roomId: string
-    userId: string
-    playerName: string
-  }): Promise<WebSocketResponse> => {
-    const message: WebSocketMessage = {
-      action: WebSocketActions.JOIN_ROOM,
-      data: joinData,
-      roomId: joinData.roomId,
-      userId: joinData.userId,
-      timestamp: Date.now()
-    }
-
-    await websocketService.sendMessage(message)
-    
-    // Wait for the actual response from the server
-    // The server might respond with either JOIN_ROOM or roomUpdated action
-    return new Promise((resolve) => {
-      const joinRoomHandler = (data: any) => {
-        websocketService.offMessage(WebSocketActions.JOIN_ROOM)
-        websocketService.offMessage('roomUpdated')
-        resolve(data)
-      }
-      
-      const roomUpdatedHandler = (data: any) => {
-        // Resolve for any roomUpdated message with room data
-        if (data.room && data.updateType === 'userJoined') {
-          websocketService.offMessage(WebSocketActions.JOIN_ROOM)
-          // Don't remove the roomUpdated handler here - let the event handler keep it
-          resolve(data)
-        }
-      }
-      
-      // Listen for both possible response types
-      websocketService.onMessage(WebSocketActions.JOIN_ROOM, joinRoomHandler)
-      websocketService.onMessage('roomUpdated', roomUpdatedHandler)
-      
-      // Add timeout to prevent hanging
-      setTimeout(() => {
-        console.warn('Join room request timed out')
-        websocketService.offMessage(WebSocketActions.JOIN_ROOM)
-        // Don't remove the roomUpdated handler here - let the event handler keep it
-        resolve({
-          action: WebSocketActions.JOIN_ROOM,
-          success: false,
-          error: 'Join room request timed out'
-        })
-      }, 10000) // 10 second timeout
-    })
-  },
-
-  /**
-   * Start room via WebSocket
-   */
-  startRoom: async (roomId: string, userId: string): Promise<void> => {
-    const message: WebSocketMessage = {
-      action: WebSocketActions.START_ROOM,
-      data: { 
-        userId,
-        roomId
+  }) =>
+    websocketService.request(
+      { action: WebSocketActions.CREATE_ROOM, data, userId: data.ownerId },
+      [WebSocketActions.CREATE_ROOM, 'roomUpdated'],
+      (response) =>
+        response.action !== 'roomUpdated' ||
+        (response.updateType === 'roomCreated' &&
+          response.room?.ownerId === data.ownerId)
+    ),
+  joinRoom: (data: { roomId: string; userId: string; playerName: string; invitationToken?: string }) =>
+    websocketService.request(
+      {
+        action: WebSocketActions.JOIN_ROOM,
+        data,
+        roomId: data.roomId,
+        userId: data.userId,
       },
-      timestamp: Date.now()
-    }
-
-    await websocketService.sendMessage(message)
-  },
-
-  /**
-   * Handle start room message
-   */
-  onStartRoom: (handler: (data: any) => void): void => {
-    websocketService.onMessage(WebSocketActions.ROOM_STARTED, handler)
-  },
-
-  /**
-   * Remove start room handler
-   */
-  offStartRoom: (): void => {
-    websocketService.offMessage(WebSocketActions.ROOM_STARTED)
-  }
+      [WebSocketActions.JOIN_ROOM, 'roomUpdated'],
+      (response) =>
+        roomMatches(data.roomId)(response) &&
+        (response.action !== 'roomUpdated' ||
+          (response.room?.seats &&
+            Object.values(response.room.seats).includes(data.userId)))
+    ),
+  startRoom: (roomId: string, userId: string) =>
+    websocketService.request(
+      { action: WebSocketActions.START_ROOM, data: { roomId, userId } },
+      [WebSocketActions.ROOM_STARTED],
+      roomMatches(roomId)
+    ),
+  onStartRoom: (handler: Handler) =>
+    websocketService.onMessage(WebSocketActions.ROOM_STARTED, handler),
+  offStartRoom: (handler?: Handler) =>
+    websocketService.offMessage(WebSocketActions.ROOM_STARTED, handler),
 }
 
-// Game Actions WebSocket Methods
 export const gameWebSocketService = {
-  /**
-   * Make a bid via WebSocket
-   */
-  makeBid: async (roomId: string, userId: string, bid: {
-    type: BidType
-    level?: number
-    suit?: Suit | "NT"
-  }): Promise<void> => {
-    // Convert bid to server format
-    let bidString: string
-    if (bid.type === "Pass") {
-      bidString = "pass"
-    } else if (bid.type === "Double") {
-      bidString = "double"
-    } else if (bid.type === "Redouble") {
-      bidString = "redouble"
-    } else if (bid.type === "Bid" && bid.level && bid.suit) {
-      const suitMap: Record<string, string> = { "♣": "C", "♦": "D", "♥": "H", "♠": "S", "NT": "NT" }
-      bidString = `${bid.level}${suitMap[bid.suit]}`
-    } else {
-      throw new Error("Invalid bid format")
+  makeBid: (
+    roomId: string,
+    userId: string,
+    bid: { type: BidType; level?: number; suit?: Suit | 'NT' }
+  ) => {
+    const suits: Record<string, string> = {
+      '♣': 'C',
+      '♦': 'D',
+      '♥': 'H',
+      '♠': 'S',
+      NT: 'NT',
     }
-
-    const message: WebSocketMessage = {
-      action: WebSocketActions.MAKE_BID,
-      data: {
-        bid: bidString,
-        userId: userId,
-        roomId: roomId
+    const value =
+      bid.type === 'Bid'
+        ? `${bid.level}${suits[bid.suit!]}`
+        : bid.type.toLowerCase()
+    return websocketService.request(
+      {
+        action: WebSocketActions.MAKE_BID,
+        data: { roomId, userId, bid: value },
       },
-      timestamp: Date.now()
-    }
-
-    await websocketService.sendMessage(message)
+      [WebSocketActions.BID_MADE],
+      roomMatches(roomId)
+    )
   },
-
-  /**
-   * Play a card via WebSocket
-   */
-  playCard: async (roomId: string, userId: string, card: {
-    suit: string
-    rank: string
-  }): Promise<void> => {
-    // Convert suit icons to letters and card to backend format (e.g., "AH" for Ace of Hearts)
-    const suitMap: Record<string, string> = { "♣": "C", "♦": "D", "♥": "H", "♠": "S", "NT": "NT" }
-    const suitLetter = suitMap[card.suit] || card.suit
-    const cardString = card.rank + suitLetter
-    
-    const message: WebSocketMessage = {
-      action: WebSocketActions.PLAY_CARD,
-      data: {
-        userId: userId,
-        roomId: roomId,
-        card: cardString
-      },
-      timestamp: Date.now()
+  playCard: (
+    roomId: string,
+    userId: string,
+    card: { suit: string; rank: string }
+  ) => {
+    const suits: Record<string, string> = {
+      '♣': 'C',
+      '♦': 'D',
+      '♥': 'H',
+      '♠': 'S',
     }
-
-    await websocketService.sendMessage(message)
-  }
+    const value =
+      (card.rank === '10' ? 'T' : card.rank) + (suits[card.suit] || card.suit)
+    return websocketService.request(
+      {
+        action: WebSocketActions.PLAY_CARD,
+        data: { roomId, userId, card: value },
+      },
+      [WebSocketActions.CARD_PLAYED],
+      roomMatches(roomId)
+    )
+  },
 }
-
-export default websocketService 
+export default websocketService

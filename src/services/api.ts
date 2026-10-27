@@ -17,6 +17,7 @@ export interface ApiOptions {
   showSuccess?: boolean
   successMessage?: string
   errorMessage?: string
+  authRetried?: boolean
 }
 
 /**
@@ -51,7 +52,7 @@ export async function apiCall<T>(
       }
     }
     
-    return apiCall<T>(retryUrl, updatedOptions)
+    return apiCall<T>(retryUrl, { ...updatedOptions, authRetried: true })
   }
   const {
     method = 'GET',
@@ -65,6 +66,8 @@ export async function apiCall<T>(
 
   // Ensure token is valid before making request
   try {
+    const account = useUserStore.getState()
+    if (account.isAuthenticated || account.wasAuthenticated) {
     // Wait for any ongoing token refresh to complete
     if (tokenManager.isTokenRefreshInProgress()) {
       const refreshSuccess = await tokenManager.waitForTokenRefresh()
@@ -77,6 +80,7 @@ export async function apiCall<T>(
       if (!tokenValid) {
         console.warn('Failed to ensure valid token, request will likely fail')
       }
+    }
     }
   } catch (error) {
     // If token manager fails to load, continue with request
@@ -115,9 +119,13 @@ export async function apiCall<T>(
     if (!response.ok) {
       // Handle 401 Unauthorized responses specifically
       if (response.status === 401) {
+        const account = useUserStore.getState()
+        if (options.authRetried || !account.isAuthenticated && !account.wasAuthenticated) {
+          return { data: null, error: 'Authentication required for this operation', success: false }
+        }
         try {
           // Try to refresh the token
-          const refreshSuccess = await tokenManager.ensureValidToken()
+          const refreshSuccess = await tokenManager.forceRefreshToken()
           
           if (refreshSuccess) {
             // Retry the original request with new token

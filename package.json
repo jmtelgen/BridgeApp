@@ -39,6 +39,7 @@
     "zustand": "^4.5.2"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@nx/cypress": "19.3.1",
     "@nx/eslint": "19.3.1",
     "@nx/eslint-plugin": "19.3.1",
@@ -52,7 +53,9 @@
     "@swc/cli": "~0.3.12",
     "@swc/core": "~1.5.7",
     "@swc/helpers": "~0.5.11",
+    "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "15.0.6",
+    "@testing-library/user-event": "^14.6.1",
     "@types/bootstrap": "^5.2.10",
     "@types/node": "^18.16.9",
     "@types/react": "18.3.1",

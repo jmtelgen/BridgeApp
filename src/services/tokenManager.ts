@@ -1,11 +1,4 @@
 import { useUserStore } from '../stores/userStore'
-import { userAuthService } from './userAuthService'
-
-interface TokenInfo {
-  accessToken: string
-  expiresIn: number
-  tokenType: string
-}
 
 class TokenManager {
   private refreshTimer: NodeJS.Timeout | null = null
@@ -69,7 +62,7 @@ class TokenManager {
         }
       }
     } catch (error) {
-      console.error('Error checking token status:', error)
+      console.error('Error checking token status')
     }
   }
 
@@ -84,15 +77,18 @@ class TokenManager {
 
     // Set global refresh lock
     this.isRefreshing = true
-    this.refreshPromise = this.performTokenRefresh()
+    const promise = this.performTokenRefresh()
+    this.refreshPromise = promise
     
     try {
-      const result = await this.refreshPromise
+      const result = await promise
       return result
     } finally {
       // Clear refresh lock
-      this.isRefreshing = false
-      this.refreshPromise = null
+      if (this.refreshPromise === promise) {
+        this.isRefreshing = false
+        this.refreshPromise = null
+      }
     }
   }
 
@@ -100,39 +96,7 @@ class TokenManager {
    * Perform the actual token refresh
    */
   private async performTokenRefresh(): Promise<boolean> {
-    try {
-      const response = await userAuthService.refreshToken()
-      
-      if (response.accessToken) {
-        // Update the store with new token
-        useUserStore.getState().updateAccessToken(response.accessToken)
-        return true
-      } else {
-        throw new Error('No access token in refresh response')
-      }
-    } catch (error) {
-      console.error('Failed to refresh token:', error)
-      
-      // If refresh fails, redirect to login
-      this.handleRefreshFailure()
-      return false
-    }
-  }
-
-  /**
-   * Handle token refresh failure
-   */
-  private handleRefreshFailure(): void {
-    // Clear auth data
-    useUserStore.getState().clearAuthData()
-    
-    // Stop monitoring
-    this.stopTokenMonitoring()
-    
-    // Redirect to login
-    if (window.location.pathname !== '/login') {
-      window.location.href = '/login'
-    }
+    return useUserStore.getState().attemptTokenRefresh()
   }
 
   /**
@@ -151,7 +115,6 @@ class TokenManager {
       
       return JSON.parse(jsonPayload)
     } catch (error) {
-      console.error('Failed to decode token:', error)
       return null
     }
   }
@@ -160,6 +123,9 @@ class TokenManager {
    * Stop token monitoring
    */
   stopTokenMonitoring(): void {
+    // Superseded refreshes may finish, but must not block a newer identity.
+    this.isRefreshing = false
+    this.refreshPromise = null
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer)
       this.refreshTimer = null
@@ -201,10 +167,8 @@ class TokenManager {
    */
   async forceRefreshToken(): Promise<boolean> {
     try {
-      await this.refreshToken()
-      return true
+      return await this.refreshToken()
     } catch (error) {
-      console.error('Force token refresh failed:', error)
       return false
     }
   }
@@ -229,7 +193,6 @@ class TokenManager {
       const result = await this.refreshPromise
       return result
     } catch (error) {
-      console.error('Error waiting for token refresh:', error)
       return false
     }
   }

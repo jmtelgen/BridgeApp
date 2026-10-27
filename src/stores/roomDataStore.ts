@@ -4,15 +4,33 @@ import { useUserStore } from './userStore'
 import { Position } from '../components/bridge/types'
 import { subtractPositions } from '../utils/positionUtils'
 
-interface RoomData {
+export interface SeatPresence {
+  status: 'online' | 'reconnecting' | 'offline' | 'robot' | 'empty'
+  userId?: string
+  reservedUntil?: number
+  connectionCount: number
+}
+
+useUserStore.subscribe((state, previous) => {
+  if ((state.isAuthenticated !== previous.isAuthenticated &&
+       (!state.isAuthenticated || !previous.wasAuthenticated)) ||
+      (previous.user !== null && state.user === null) ||
+      (previous.user && state.user && previous.user.userId !== state.user.userId))
+    useRoomDataStore.getState().clearCurrentRoom()
+})
+export interface RoomData {
   roomId: string
   ownerId: string
   playerName: string
   roomName: string
   isPrivate: boolean
+  locked?: boolean
+  eventId?: string | null
+  computerLevel?: 'heuristic' | 'standard' | 'thoughtful'
+  presence?: Record<string, SeatPresence>
   seats: Record<string, string>
   state: string
-  gameData: {
+  gameData: null | {
     currentPhase: string
     turn: string
     bids: any[]
@@ -36,6 +54,7 @@ interface RoomDataStore {
   getWestPlayerName: (currentPlayerPosition: Position) => String | null
   getNorthPlayerName: (currentPlayerPosition: Position) => String | null
   getDisplayPositionLabel: (displayPosition: Position, currentPlayerPosition: Position) => string
+  getRobotDisplayInfo: (seat: string) => { isRobot: boolean; robotName: string | null }
 }
 
 export const useRoomDataStore = create<RoomDataStore>()(
@@ -46,12 +65,12 @@ export const useRoomDataStore = create<RoomDataStore>()(
 
       // Actions
       setCurrentRoom: (room) => {
-        set({ currentRoom: room })
+        set({ currentRoom: { ...room, gameData: null } })
       },
 
       updateCurrentRoom: (updates) => {
         set((state) => ({
-          currentRoom: state.currentRoom ? { ...state.currentRoom, ...updates } : null
+          currentRoom: state.currentRoom ? { ...state.currentRoom, ...updates, gameData: null } : null
         }))
       },
 
@@ -80,7 +99,13 @@ export const useRoomDataStore = create<RoomDataStore>()(
           return playerName || 'You'
         }
         
-        // For other players, create a friendly name from their ID
+        // Check if this is a robot player
+        if (get().isRobot(playerId)) {
+          // For robots, display their actual name (e.g., "ROBOT_1", "ROBOT_2")
+          return playerId
+        }
+
+        // For other human players, create a friendly name from their ID
         // Extract a number from the player ID for display
         const match = playerId.match(/user_.*?(\d+)/)
         if (match) {
@@ -110,20 +135,35 @@ export const useRoomDataStore = create<RoomDataStore>()(
       },
 
       isRobot: (playerName: string) => {
-        // Check if the player name indicates it's a robot
-        return playerName.toLowerCase().includes('robot') || 
-           playerName.toLowerCase().includes('ai') ||
-           playerName.toLowerCase().includes('bot')
+        return playerName.toUpperCase().startsWith('ROBOT_');
       },
 
       getDisplayPositionLabel: (displayPosition: Position, currentPlayerPosition: Position) => {
         // We want: what does the current player see at 'displayPosition'?
         // This is the opposite of subtractPositions - we need what 'currentPos' looks like from 'displayPosition' perspective
         return subtractPositions(currentPlayerPosition, displayPosition)
+      },
+
+      getRobotDisplayInfo: (seat: string) => {
+        const { currentRoom } = get();
+        if (!currentRoom) return { isRobot: false, robotName: null }
+
+        const playerId = currentRoom.seats[seat]
+        if (!playerId) return { isRobot: false, robotName: null }
+
+        const isRobotPlayer = get().isRobot(playerId)
+        return {
+          isRobot: isRobotPlayer,
+          robotName: isRobotPlayer ? playerId : null
+        }
       }
     }),
     {
       name: 'bridge-room-data-storage', // localStorage key
+      version: 1,
+      migrate: (stored: any) => ({
+        currentRoom: stored?.currentRoom ? { ...stored.currentRoom, gameData: null } : null
+      }),
       partialize: (state) => ({ 
         currentRoom: state.currentRoom
       })

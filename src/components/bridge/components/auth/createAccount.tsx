@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Eye, EyeOff, UserPlus } from "lucide-react"
 import { userAuthService, type CreateAccountRequest } from "../../../../services/userAuthService"
+import { PASSWORD_HINT, validatePassword } from "../../../../utils/passwordPolicy"
 
 // Types are now imported from userAuthService
 
@@ -44,9 +45,8 @@ export default function CreateAccountPage() {
       newErrors.email = "Please enter a valid email address"
     }
 
-    if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters"
-    }
+    const passwordError = validatePassword(formData.password)
+    if (passwordError) newErrors.password = passwordError
 
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = "Passwords do not match"
@@ -71,7 +71,8 @@ export default function CreateAccountPage() {
       }
 
       // Make API call to create account endpoint
-      const response = await userAuthService.createAccount(accountData)
+      setErrors({})
+      await userAuthService.createAccount(accountData)
 
 
       
@@ -84,7 +85,6 @@ export default function CreateAccountPage() {
       }, 1500)
       
     } catch (error) {
-      console.error('Account creation error:', error)
       setErrors({ general: error instanceof Error ? error.message : 'Account creation failed. Please try again.' })
     } finally {
       setIsLoading(false)
@@ -126,6 +126,9 @@ export default function CreateAccountPage() {
                 </Label>
                                   <Input
                     id="username"
+                    autoComplete="username"
+                    aria-invalid={!!errors.username}
+                    aria-describedby={errors.username ? "username-error" : undefined}
                     type="text"
                     placeholder="Choose a username"
                     value={formData.username}
@@ -134,7 +137,7 @@ export default function CreateAccountPage() {
                     disabled={isSuccess}
                     className="h-12 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:border-yellow-400 focus:ring-yellow-400/30 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 disabled:opacity-50"
                   />
-                {errors.username && <p className="text-sm text-red-500">{errors.username}</p>}
+                {errors.username && <p id="username-error" role="alert" className="text-sm text-red-500">{errors.username}</p>}
               </div>
 
               <div className="space-y-2">
@@ -143,6 +146,9 @@ export default function CreateAccountPage() {
                 </Label>
                                   <Input
                     id="email"
+                    autoComplete="email"
+                    aria-invalid={!!errors.email}
+                    aria-describedby={errors.email ? "email-error" : undefined}
                     type="email"
                     placeholder="Enter your email"
                     value={formData.email}
@@ -151,7 +157,7 @@ export default function CreateAccountPage() {
                     disabled={isSuccess}
                     className="h-12 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:border-yellow-400 focus:ring-yellow-400/30 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 disabled:opacity-50"
                   />
-                {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
+                {errors.email && <p id="email-error" role="alert" className="text-sm text-red-500">{errors.email}</p>}
               </div>
 
               <div className="space-y-2">
@@ -161,6 +167,10 @@ export default function CreateAccountPage() {
                 <div className="relative">
                   <Input
                     id="password"
+                    autoComplete="new-password"
+                    maxLength={128}
+                    aria-invalid={!!errors.password}
+                    aria-describedby={`password-hint${errors.password ? " password-error" : ""}`}
                     type={showPassword ? "text" : "password"}
                     placeholder="Create a password"
                     value={formData.password}
@@ -175,6 +185,7 @@ export default function CreateAccountPage() {
                     size="sm"
                     className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-700"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                     disabled={isSuccess}
                   >
                     {showPassword ? (
@@ -184,7 +195,8 @@ export default function CreateAccountPage() {
                     )}
                   </Button>
                 </div>
-                {errors.password && <p className="text-sm text-red-500">{errors.password}</p>}
+                <p id="password-hint" className="text-sm text-gray-600 dark:text-gray-300">{PASSWORD_HINT}</p>
+                {errors.password && <p id="password-error" role="alert" className="text-sm text-red-500">{errors.password}</p>}
               </div>
 
               <div className="space-y-2">
@@ -194,6 +206,10 @@ export default function CreateAccountPage() {
                 <div className="relative">
                   <Input
                     id="confirmPassword"
+                    autoComplete="new-password"
+                    maxLength={128}
+                    aria-invalid={!!errors.confirmPassword}
+                    aria-describedby={errors.confirmPassword ? "confirm-password-error" : undefined}
                     type={showConfirmPassword ? "text" : "password"}
                     placeholder="Confirm your password"
                     value={formData.confirmPassword}
@@ -208,6 +224,7 @@ export default function CreateAccountPage() {
                     size="sm"
                     className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-700"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"}
                     disabled={isSuccess}
                   >
                     {showConfirmPassword ? (
@@ -217,19 +234,19 @@ export default function CreateAccountPage() {
                     )}
                   </Button>
                 </div>
-                {errors.confirmPassword && <p className="text-sm text-red-500">{errors.confirmPassword}</p>}
+                {errors.confirmPassword && <p id="confirm-password-error" role="alert" className="text-sm text-red-500">{errors.confirmPassword}</p>}
               </div>
 
               {/* Success message display */}
               {isSuccess && (
-                <p className="text-green-600 text-sm text-center font-medium">
+                <p role="status" className="text-green-600 text-sm text-center font-medium">
                   Account created successfully! Redirecting to login...
                 </p>
               )}
 
               {/* General error display */}
               {errors.general && (
-                <p className="text-red-500 text-sm text-center">{errors.general}</p>
+                <p role="alert" className="text-red-500 text-sm text-center">{errors.general}</p>
               )}
 
                               <Button

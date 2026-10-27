@@ -40,3 +40,8 @@ Thumbs.db
 
 .nx/cache
 .nx/workspace-data
+
+# Local browser binaries and validation output
+.browser-artifacts/
+test-results/
+playwright-report/

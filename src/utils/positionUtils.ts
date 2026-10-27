@@ -1,5 +1,16 @@
 import { Position } from "../components/bridge/types"
 
+/** Rotate actual seats and trick cards together, with the viewer always at the bottom. */
+export function toDisplayPosition(actual: Position, viewer: Position): Position {
+  const seats: Position[] = ['North', 'East', 'South', 'West']
+  return seats[(seats.indexOf(actual) - seats.indexOf(viewer) + 6) % 4]
+}
+
+export function toGamePosition(display: Position, viewer: Position): Position {
+  const seats: Position[] = ['North', 'East', 'South', 'West']
+  return seats[(seats.indexOf(display) + seats.indexOf(viewer) + 2) % 4]
+}
+
 /**
  * Position subtraction utility for bridge game logic.
  * This allows calculating relative positions and rotations.
