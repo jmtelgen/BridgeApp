@@ -12,7 +12,7 @@ concurrency:
 jobs:
   access-check:
     name: Verify staging role identity only
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/deployment/github-staging-bootstrap'
+    if: github.repository == 'jmtelgen/BridgeApp' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: staging
