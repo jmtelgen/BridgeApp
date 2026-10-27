@@ -5,11 +5,15 @@ import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin'
 import path from 'path'
 import svgr from 'vite-plugin-svgr'
 import tailwindcss from '@tailwindcss/vite'
+import { stagingBuildSettings } from './deployment/staging-build.mjs'
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, __dirname, 'VITE_')
+  // Staging must never inherit endpoint values from local/production env files.
+  const staging = mode === 'staging' ? stagingBuildSettings(process.env) : undefined
+  const env = staging ? {} : loadEnv(mode, __dirname, 'VITE_')
   return {
     root: __dirname,
+    envDir: staging ? false : undefined,
     cacheDir: './node_modules/.vite/TestProject',
 
     server: {
@@ -83,7 +87,8 @@ export default defineConfig(({ mode }) => {
     },
 
     // Base path for relative URLs (important for CloudFront)
-    base: './',
+    base: staging?.base ?? './',
+    define: staging?.define,
 
     test: {
       watch: false,
