@@ -1,0 +1,78 @@
+name: Manual AWS staging access check (no deployment)
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: aws-staging-access-check
+  cancel-in-progress: false
+
+jobs:
+  access-check:
+    name: Verify staging role identity only
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/deployment/github-staging-bootstrap'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: staging
+    permissions:
+      id-token: write
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_STAGING_ROLE_ARN: ${{ vars.AWS_STAGING_ROLE_ARN }}
+      AWS_EC2_METADATA_DISABLED: 'true'
+      AWS_PAGER: ''
+    steps:
+      - name: Validate staging configuration before requesting credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$AWS_ACCOUNT_ID" || -z "$AWS_REGION" || -z "$AWS_STAGING_ROLE_ARN" ]]; then
+            echo "::error::Set all staging variables: AWS_ACCOUNT_ID, AWS_REGION, AWS_STAGING_ROLE_ARN."
+            exit 1
+          fi
+          if [[ "$AWS_ACCOUNT_ID" != "851725597758" || "$AWS_REGION" != "us-west-2" ]]; then
+            echo "::error::Unexpected staging account or region."
+            exit 1
+          fi
+          if [[ "$AWS_STAGING_ROLE_ARN" == *:root ]]; then
+            echo "::error::Root credentials are forbidden."
+            exit 1
+          fi
+          if [[ "$AWS_STAGING_ROLE_ARN" != "arn:aws:iam::851725597758:role/GitHubBridgeAppStaging" ]]; then
+            echo "::error::Expected the dedicated GitHubBridgeAppStaging IAM role ARN."
+            exit 1
+          fi
+      - name: Assume staging access-check role through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_STAGING_ROLE_ARN }}
+          role-session-name: BridgeApp-access-check-${{ github.run_id }}
+          role-duration-seconds: 900
+          unset-current-credentials: true
+      - name: Verify AWS account and assumed role (no application deployment)
+        shell: bash
+        run: |
+          set -euo pipefail
+          identity="$(aws sts get-caller-identity --query '[Account,Arn]' --output text)"
+          read -r account arn <<< "$identity"
+          if [[ "$arn" == arn:aws:iam::*:root ]]; then
+            echo "::error::Root credentials are forbidden."
+            exit 1
+          fi
+          if [[ "$account" != "$AWS_ACCOUNT_ID" || "$account" != "851725597758" ]]; then
+            echo "::error::STS returned an unexpected AWS account."
+            exit 1
+          fi
+          if [[ "$arn" != arn:aws:sts::851725597758:assumed-role/GitHubBridgeAppStaging/BridgeApp-access-check-* ]]; then
+            echo "::error::STS did not return the expected staging assumed role."
+            exit 1
+          fi
+          {
+            echo "## AWS staging access check only"
+            echo "Verified the dedicated assumed role in account $account (us-west-2)."
+            echo "No application deployment or AWS resource modification was performed."
+          } >> "$GITHUB_STEP_SUMMARY"

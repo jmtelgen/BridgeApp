@@ -1,37 +1,55 @@
-name: CI
+name: Frontend CI
 
 on:
   push:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
 
 permissions:
-  actions: read
   contents: read
 
+concurrency:
+  group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  main:
+  frontend:
+    name: Selected frontend tests, types and build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NX_DAEMON: 'false'
+      NX_NO_CLOUD: 'true'
+      CYPRESS_INSTALL_BINARY: '0'
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          fetch-depth: 0
-
-      # Connect your workspace on nx.app and uncomment this to enable task distribution.
-      # The "--stop-agents-after" is optional, but allows idle agents to shut down once the "e2e-ci" targets have been requested
-      # - run: npx nx-cloud start-ci-run --distribute-on="5 linux-medium-js" --stop-agents-after="e2e-ci"
-
-      # Cache node_modules
-      - uses: actions/setup-node@v3
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: '22'
           cache: 'npm'
-
-      - run: npm ci
-      - uses: nrwl/nx-set-shas@v4
-
-      # Prepend any command with "nx-cloud record --" to record its logs to Nx Cloud
-      # - run: npx nx-cloud record -- echo Hello World
-      - run: npx nx affected -t lint test build
-      - run: npx nx affected --parallel 1 -t e2e-ci
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run selected frontend regression tests (not the full historical suite)
+        run: >-
+          npx --no-install vitest run --config vitest.config.ts
+          tests/frontend
+          tests/components/Room.test.tsx
+          tests/components/userStore.test.ts
+          tests/components/gameStore.test.ts
+      - name: Check application TypeScript
+        run: npx --no-install tsc --noEmit -p tsconfig.app.json
+      - name: Build frontend with Nx
+        run: npx --no-install nx build TestProject --skip-nx-cache
+      - name: Upload built frontend (not a deployment)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: frontend-${{ github.sha }}
+          path: dist/TestProject/
+          if-no-files-found: error
+          retention-days: 7
