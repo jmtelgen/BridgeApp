@@ -1,16 +1,15 @@
-import { useEffect, useState } from 'react';
-import { Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Route, Routes, useNavigate } from 'react-router-dom';
 import { RoomManager } from './components/bridge/components/Room';
 import { RoomGame } from './components/bridge/components/RoomGame';
 import CreateAccountPage from './components/bridge/components/auth/createAccount';
 import LoginPage from './components/bridge/components/auth/login';
 import { useRoomDataStore } from './stores/roomDataStore';
-import { useUserStore } from './stores/userStore';
 import { Toaster } from './components/ui/toaster';
 import { websocketService } from './services/websocketService';
-import { useWebSocketCleanup } from './hooks/useWebSocketCleanup';
 import { useAutoTokenRefresh } from './hooks/useAutoTokenRefresh';
 import { Position } from './components/bridge/types';
+import { PreferenceEffects } from './components/bridge/components/PlayerPreferences';
 
 // Room component that shows at the root
 function RoomPage() {
@@ -37,57 +36,15 @@ function RoomPage() {
 
 // Bridge game component for the room route
 function RoomGameWrapper() {
-  const { roomId } = useParams<{ roomId: string }>();
-  const navigate = useNavigate();
-  const { currentRoom } = useRoomDataStore();
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Use WebSocket cleanup hook
-  useWebSocketCleanup(roomId);
-
-  useEffect(() => {
-    if (!roomId) {
-      setIsLoading(false);
-      return;
-    }
-
-    // If we have room data for this roomId, consider it valid
-    if (currentRoom && currentRoom.roomId === roomId) {
-      setIsLoading(false);
-      return;
-    }
-
-    // Simple loading state
-    setIsLoading(false);
-  }, [roomId, currentRoom]);
-
-  // Show loading state while checking room access
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading room...</p>
-        </div>
-      </div>
-    );
-  }
-  
   return <RoomGame />;
 }
 
 export function App() {
-  const { generateUserId } = useUserStore()
-  
   // Use auto token refresh hook
   const { isRefreshing, shouldShowLogin } = useAutoTokenRefresh()
 
-  // Initialize user ID on app start (WebSocket connection will happen when needed)
+  // Signed identity and connection are obtained on demand, not invented on app start.
   useEffect(() => {
-    // Generate user ID on initial page load
-    const userId = generateUserId()
-    // Note: WebSocket connection will be established when user creates or joins a room
-
     // Handle page unload (browser close, refresh, navigation)
     const handleBeforeUnload = () => {
       websocketService.disconnect()
@@ -108,7 +65,7 @@ export function App() {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       // Don't disconnect WebSocket on app unmount - only on tab close
     }
-  }, [generateUserId])
+  }, [])
 
   // Show loading state while attempting token refresh
   if (isRefreshing) {
@@ -124,6 +81,7 @@ export function App() {
 
   return (
     <>
+      <PreferenceEffects />
       <Routes>
         <Route path="/" element={<RoomPage />} />
         <Route path="/room/:roomId" element={<RoomGameWrapper />} />

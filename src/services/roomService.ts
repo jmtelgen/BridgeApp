@@ -14,6 +14,7 @@ interface CreateRoomRequest {
 interface JoinRoomRequest {
   playerName: string  // The player's display name
   roomId: string
+  invitationToken?: string
 }
 
 interface RoomResponse {
@@ -44,18 +45,10 @@ export const roomService = {
    * Create a new room
    */
   createRoom: async (request: Omit<CreateRoomRequest, 'ownerId'>) => {
-    const userId = useUserStore.getState().userId
-    if (!userId) {
-      return {
-        data: null,
-        error: 'User ID not found. Please refresh the page.',
-        success: false
-      }
-    }
-
     try {
       // Establish WebSocket connection before creating room
       await websocketService.connect()
+      const userId = useUserStore.getState().userId!
       
       // Try WebSocket first
       const wsResponse = await roomWebSocketService.createRoom({
@@ -66,10 +59,22 @@ export const roomService = {
         ownerId: userId
       })
 
-      if (wsResponse.success) {
+      if (wsResponse.success !== false && wsResponse.room?.ownerId === userId) {
+        let room = wsResponse.room
+        // Legacy create replies replace account IDs with display names. Only
+        // the authorized personalized snapshot can establish seat membership.
+        if (!Object.values(room.seats || {}).includes(userId)) {
+          const snapshot = await roomWebSocketService.getGameState(room.roomId, userId)
+          if (snapshot.error || snapshot.success === false ||
+              snapshot.room?.roomId !== room.roomId ||
+              snapshot.room?.ownerId !== userId ||
+              !Object.values(snapshot.room?.seats || {}).includes(userId))
+            throw new Error('The server did not confirm your signed room membership. Reconnect before trying again.')
+          room = snapshot.room
+        }
         // The WebSocket response contains the room data directly
         return {
-          data: { room: wsResponse.room },
+          data: { room },
           error: null,
           success: true
         }
@@ -84,7 +89,7 @@ export const roomService = {
       console.error('WebSocket create room failed:', wsError)
       return {
         data: null,
-        error: 'Failed to create room via WebSocket',
+        error: wsError instanceof Error ? wsError.message : 'Failed to create room via WebSocket',
         success: false
       }
     }
@@ -94,29 +99,21 @@ export const roomService = {
    * Join an existing room
    */
   joinRoom: async (request: JoinRoomRequest) => {
-    const userId = useUserStore.getState().userId
-    if (!userId) {
-      return {
-        data: null,
-        error: 'User ID not found. Please refresh the page.',
-        success: false
-      }
-    }
-
-
-
     try {
       // Establish WebSocket connection before joining room
       await websocketService.connect()
+      const userId = useUserStore.getState().userId!
       
       // Try WebSocket first
       const wsResponse = await roomWebSocketService.joinRoom({
         roomId: request.roomId,
         userId: userId,
-        playerName: request.playerName
+        playerName: request.playerName,
+        ...(request.invitationToken ? { invitationToken: request.invitationToken } : {})
       })
 
-      if (wsResponse.success) {
+      if (wsResponse.success !== false && wsResponse.room?.roomId === request.roomId &&
+          Object.values(wsResponse.room.seats || {}).includes(userId)) {
         // The WebSocket response contains the room data directly
         return {
           data: { room: wsResponse.room },
@@ -134,7 +131,7 @@ export const roomService = {
       console.error('WebSocket join room failed:', wsError)
       return {
         data: null,
-        error: 'Failed to join room via WebSocket',
+        error: wsError instanceof Error ? wsError.message : 'Failed to join room via WebSocket',
         success: false
       }
     }
@@ -161,12 +158,13 @@ export const roomService = {
   /**
    * Leave a room
    */
-  leaveRoom: async (roomId: string, userId: string) => {
-    return api.post(`/room/${roomId}/leave`, { userId }, {
-      errorMessage: 'Failed to leave room',
-      showSuccess: true,
-      successMessage: 'Left room successfully'
-    })
+  leaveRoom: async (roomId: string, _userId: string) => {
+    try {
+      const data = await roomWebSocketService.leaveRoom(roomId)
+      return { success: true, data, error: null }
+    } catch (error) {
+      return { success: false, data: null, error: error instanceof Error ? error.message : 'Failed to leave room' }
+    }
   },
 
   /**
@@ -194,12 +192,7 @@ export const roomService = {
     }
 
     try {
-      // Since leaveRoom is not available in WebSocket API, use REST API directly
-      const result = await api.post(`/room/${roomId}/leave`, { userId }, {
-        errorMessage: 'Failed to leave room',
-        showSuccess: true,
-        successMessage: 'Left room successfully'
-      })
+      const result = await roomService.leaveRoom(roomId, userId)
       
       if (result.success) {
         // Cleanup WebSocket handlers

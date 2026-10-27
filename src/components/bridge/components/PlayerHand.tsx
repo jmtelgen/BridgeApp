@@ -1,6 +1,6 @@
 import { PlayingCard, Position, Suit } from '../types'
 import { Card } from './Card'
-import { sortHand, sortHandForDummy } from '../utils/game-utils'
+import { sortVisibleHand, visibleSuitOrder } from '../../../utils/handOrder'
 
 interface PlayerHandProps {
   position: Position
@@ -13,6 +13,7 @@ interface PlayerHandProps {
   currentTrickCard: PlayingCard | null
   onCardClick?: (card: PlayingCard) => void
   displayAsDummy?: boolean // New prop to control dummy display style
+  trump?: Suit | 'NT' | null
 }
 
 export const PlayerHand = ({ 
@@ -25,7 +26,8 @@ export const PlayerHand = ({
   selectedCard, 
   currentTrickCard,
   onCardClick,
-  displayAsDummy = false
+  displayAsDummy = false,
+  trump
 }: PlayerHandProps) => {
 
   // Don't show cards if they shouldn't be visible
@@ -41,7 +43,7 @@ export const PlayerHand = ({
 
   // For dummy display in columns (used for East/West dummy hands)
   if (isDummy && displayAsDummy) {
-    const sortedCards = cards ? sortHandForDummy(cards) : []
+    const sortedCards = sortVisibleHand(cards || [], trump)
     const cardsBySuit: Record<Suit, PlayingCard[]> = {
       "♠": [],
       "♥": [],
@@ -55,11 +57,11 @@ export const PlayerHand = ({
 
     return (
       <div className="flex gap-2">
-        {(["♠", "♥", "♦", "♣"] as Suit[]).map(suit => (
+        {visibleSuitOrder(trump).map(suit => (
           <div key={suit} className="flex flex-col gap-1">
-            {cardsBySuit[suit].map((card, index) => (
+            {cardsBySuit[suit].map(card => (
               <Card
-                key={`${card.suit}-${card.rank}-${index}`}
+                key={`${card.suit}-${card.rank}`}
                 card={card}
                 isClickable={isPlayerTurn}
                 isSelected={false}
@@ -76,13 +78,12 @@ export const PlayerHand = ({
     )
   }
 
-  // For regular hands and North dummy (display in a row, sorted high to low)
-  const sortedCards = cards ? sortHand(cards) : []
+  const sortedCards = sortVisibleHand(cards || [], trump)
   return (
     <div className="flex gap-1 flex-wrap">
-      {sortedCards.map((card, index) => (
+      {sortedCards.map(card => (
         <Card
-          key={`${card.suit}-${card.rank}-${index}`}
+          key={`${card.suit}-${card.rank}`}
           card={card}
           isClickable={isPlayerTurn}
           isSelected={

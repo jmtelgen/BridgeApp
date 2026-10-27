@@ -2,7 +2,7 @@
 
 export const websocketConfig = {
   // WebSocket endpoint - should be set in environment variables
-  endpoint: import.meta.env.VITE_WS_ENDPOINT || 'wss://ipp77av3oi.execute-api.us-west-2.amazonaws.com/dev',
+  endpoint: import.meta.env.VITE_WS_ENDPOINT || '',
   
   // Connection settings
   reconnectAttempts: 5,
@@ -14,10 +14,10 @@ export const websocketConfig = {
   // Heartbeat interval (in milliseconds) - for keeping connection alive
   heartbeatInterval: 30000,
 
-  // Query parameters for WebSocket connection
+  // Identity is server-verified from bridge.auth.<signed token>, never a query ID.
   queryParams: {
-    userId: true,    // Include user ID in connection
-    userName: true   // Include player name in connection
+    userId: false,
+    userName: false
   },
   
   // AWS API Gateway WebSocket specific settings
@@ -31,6 +31,8 @@ export const websocketConfig = {
       'createRoom',
       'joinRoom',
       'startRoom',
+      'getGameState',
+      'nextBoard',
       
       // Game actions
       'makeBid',

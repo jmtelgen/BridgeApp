@@ -1,183 +1,108 @@
-// Types for authentication API requests/responses
 export interface LoginRequest {
   username: string
   password: string
 }
 
+export interface AccountUser {
+  userId: string
+  username: string
+  email: string
+  createdAt: string
+}
+
 export interface LoginResponse {
   message: string
   accessToken: string
-  refreshToken: string
-  user: {
-    userId: string
-    username: string
-    email: string
-    createdAt: string
-  }
+  user: AccountUser
   expiresIn: number
   tokenType: string
 }
 
-export interface CreateAccountRequest {
-  username: string
+export interface CreateAccountRequest extends LoginRequest {
   email: string
-  password: string
 }
 
 export interface CreateAccountResponse {
   message: string
-  user: {
-    userId: string
-    username: string
-    email: string
-    createdAt: string
-  }
+  user: AccountUser
 }
 
 export interface RefreshTokenResponse {
   accessToken: string
   expiresIn: number
   tokenType: string
+  userId?: string
 }
 
-// User Authentication Service
-export const userAuthService = {
-  /**
-   * User login
-   */
-  login: async (request: LoginRequest): Promise<LoginResponse> => {
-    const response = await fetch('/api/account/login', {
+async function request(path: string, fallback: string, body?: unknown) {
+  let response: Response
+  try {
+    response = await fetch(path, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-      credentials: 'include' // Important for cookies
+      credentials: 'include',
+      ...(body === undefined ? {} : {
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
     })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Login error response:', errorText)
-      
-      let errorMessage = 'Login failed'
-      try {
-        const errorData = JSON.parse(errorText)
-        errorMessage = errorData.message || errorData.error || errorMessage
-      } catch (e) {
-        errorMessage = errorText || errorMessage
-      }
-      
-      throw new Error(errorMessage)
-    }
-
-    const responseData = await response.json()
-    
-    // Handle AWS Lambda/API Gateway response format
-    let parsedData
-    if (responseData.body) {
-      try {
-        parsedData = typeof responseData.body === 'string' ? JSON.parse(responseData.body) : responseData.body
-      } catch (e) {
-        console.error('Failed to parse response body:', e)
-        throw new Error('Invalid response format from server')
-      }
-    } else {
-      parsedData = responseData
-    }
-    
-    return parsedData
-  },
-
-  /**
-   * User account creation
-   */
-  createAccount: async (request: CreateAccountRequest): Promise<CreateAccountResponse> => {
-    const response = await fetch('/api/account', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request)
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Create account error response:', errorText)
-      
-      let errorMessage = 'Account creation failed'
-      try {
-        const errorData = JSON.parse(errorText)
-        errorMessage = errorData.message || errorData.error || errorMessage
-      } catch (e) {
-        // If response isn't JSON, use the text directly
-        if (errorText.includes('Missing Authentication Token')) {
-          errorMessage = 'Server configuration error: Create account endpoint requires authentication. Please contact support.'
-        } else {
-          errorMessage = errorText || errorMessage
-        }
-      }
-      
-      throw new Error(errorMessage)
-    }
-
-    const responseData = await response.json()
-    
-    // Handle AWS Lambda/API Gateway response format
-    let parsedData
-    if (responseData.body) {
-      try {
-        parsedData = typeof responseData.body === 'string' ? JSON.parse(responseData.body) : responseData.body
-      } catch (e) {
-        console.error('Failed to parse create account response body:', e)
-        throw new Error('Invalid response format from server')
-      }
-    } else {
-      parsedData = responseData
-    }
-    return parsedData
-  },
-
-  /**
-   * Refresh access token using refresh token
-   */
-  refreshToken: async (): Promise<RefreshTokenResponse> => {
-    const response = await fetch('/api/auth/refresh', {
-      method: 'POST',
-      credentials: 'include' // This will automatically include the refresh token cookie
-    })
-
-    if (!response.ok) {
-      throw new Error('Token refresh failed')
-    }
-
-    const responseData = await response.json()
-    
-    // Handle AWS Lambda/API Gateway response format
-    let parsedData
-    if (responseData.body) {
-      try {
-        parsedData = typeof responseData.body === 'string' ? JSON.parse(responseData.body) : responseData.body
-      } catch (e) {
-        console.error('Failed to parse refresh token response body:', e)
-        throw new Error('Invalid response format from server')
-      }
-    } else {
-      parsedData = responseData
-    }
-    return parsedData
-  },
-
-  /**
-   * User logout
-   */
-  logout: async (): Promise<void> => {
-    const response = await fetch('/api/logout', {
-      method: 'POST',
-      credentials: 'include'
-    })
-
-    if (!response.ok) {
-      throw new Error('Logout failed')
-    }
+  } catch {
+    throw new Error(`${fallback}. Unable to reach the server. Please try again.`)
   }
+  let envelope
+  let data
+  try {
+    envelope = await response.json()
+    data = envelope && 'body' in envelope
+      ? typeof envelope.body === 'string' ? JSON.parse(envelope.body) : envelope.body
+      : envelope
+  } catch {
+    throw new Error(fallback)
+  }
+  if (!response.ok || Number(envelope?.statusCode) >= 400 || data?.error) {
+    const message = data?.message || data?.error
+    throw new Error(typeof message === 'string' ? message : fallback)
+  }
+  if (!data || typeof data !== 'object') throw new Error('Invalid response from server')
+  return data
+}
+
+// The backend verifies signatures. Here we reject malformed/expired responses
+// before using their identity; decoding alone is not authentication.
+function tokenSubject(token: unknown): string {
+  try {
+    if (typeof token !== 'string' || token.split('.').length !== 3) throw new Error()
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    if (typeof payload.userId !== 'string' || !payload.userId ||
+        !Number.isFinite(payload.exp) || payload.exp * 1000 <= Date.now()) throw new Error()
+    return payload.userId
+  } catch {
+    throw new Error('The server returned an invalid account session. Please sign in again.')
+  }
+}
+
+function validUser(user: AccountUser): boolean {
+  return !!user && ['userId', 'username', 'email'].every(
+    field => typeof user[field as keyof AccountUser] === 'string' && !!user[field as keyof AccountUser]
+  )
+}
+
+export const userAuthService = {
+  login: async (body: LoginRequest): Promise<LoginResponse> => {
+    const data = await request('/api/account/login', 'Login failed', body)
+    if (!validUser(data.user) || tokenSubject(data.accessToken) !== data.user.userId)
+      throw new Error('The server returned an invalid account identity. Please sign in again.')
+    return data
+  },
+  createAccount: async (body: CreateAccountRequest): Promise<CreateAccountResponse> => {
+    const data = await request('/api/account', 'Account creation failed', body)
+    if (!validUser(data.user)) throw new Error('The server did not confirm account creation. Please try signing in.')
+    return data
+  },
+  refreshToken: async (): Promise<RefreshTokenResponse> => {
+    const data = await request('/api/auth/refresh', 'Token refresh failed')
+    return { ...data, userId: tokenSubject(data.accessToken) }
+  },
+  logout: async (): Promise<void> => {
+    await request('/api/logout', 'Server logout failed; the refresh cookie may still be active')
+  },
 }

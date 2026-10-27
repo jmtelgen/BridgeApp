@@ -33,6 +33,9 @@ export interface GameData {
   currentTrick: Trick
   tricks: Trick[]
   previousTrick: Trick | null // Track the previous trick to display until next card is played
+  completedTrick?: Trick | null
+  scheduledAction?: { kind: 'robotCard' | 'robotBid' | 'clearTrick'; dueAt: number } | null
+  serverTimeMs?: number
   contract: {
     level: number
     suit: Suit | "NT"
@@ -47,12 +50,29 @@ export interface GameData {
     NS: boolean
     EW: boolean
   }
+  validBids?: string[]
+  legalCards?: string[]
+  playSeat?: Position | null
+  isMyTurn?: boolean
+  handCounts?: Partial<Record<Position, number>>
+  revision?: number
+  result?: {
+    scoreNS: number
+    scoreEW: number
+    declarerTricks: number
+    target: number
+    made: boolean
+    passedOut?: boolean
+    contract?: string | null
+    multiplier?: number
+  } | null
+  scores?: { NS: number; EW: number }
 }
 
 // New types for seat-based response format
 export interface PublicGameState {
   currentPhase: string
-  turn: string
+  turn: string | null
   dealer: string
   vulnerability: string
   bids: any[]
@@ -65,7 +85,17 @@ export interface PublicGameState {
   dummy: string | null
   dummyHand: string[] | null
   previousTrick: any | null
+  completedTrick?: any | null
+  pendingAction?: GameData['scheduledAction']
+  serverTimeMs?: number
+  pacing?: { robotCardDelayMs: number; trickHoldMs: number }
   gameResult: string | null
+  handCounts?: Partial<Record<Position, number>>
+  revision?: number
+  boardNumber?: number
+  contractMultiplier?: number
+  result?: GameData['result']
+  scores?: GameData['scores']
 }
 
 export interface PrivateGameState {
@@ -76,6 +106,8 @@ export interface PrivateGameState {
   isDeclarer: boolean
   isDummy: boolean
   partnerSeat: string | null
+  legalCards?: string[] | null
+  playSeat?: Position | null
 }
 
 export interface SeatBasedGameResponse {

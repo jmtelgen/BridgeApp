@@ -3,6 +3,15 @@ import { persist } from 'zustand/middleware'
 import { userAuthService } from '../services/userAuthService'
 import { tokenManager } from '../services/tokenManager'
 
+let authGeneration = 0
+let refreshPromise: Promise<boolean> | null = null
+let loggingOut = false
+export const getAuthGeneration = () => authGeneration
+
+function discardGuestCredentials() {
+  try { sessionStorage.removeItem('bridge-guest-session') } catch { /* Storage may be disabled. */ }
+}
+
 interface User {
   userId: string
   username: string
@@ -82,13 +91,20 @@ export const useUserStore = create<UserStore>()(
       
       // Authentication methods
       setAuthData: (accessToken: string, user: User) => {
-        set({ isAuthenticated: true, accessToken, user, wasAuthenticated: true })
+        authGeneration += 1
+        refreshPromise = null
+        tokenManager.stopTokenMonitoring()
+        discardGuestCredentials()
+        set({ isAuthenticated: true, accessToken, user, userId: user.userId, playerName: user.username, position: null, wasAuthenticated: true })
         
         // Initialize token monitoring when user logs in
         tokenManager.initialize()
       },
       clearAuthData: () => {
-        set({ isAuthenticated: false, accessToken: null, user: null, wasAuthenticated: false })
+        authGeneration += 1
+        refreshPromise = null
+        discardGuestCredentials()
+        set({ isAuthenticated: false, accessToken: null, user: null, userId: null, playerName: null, position: null, wasAuthenticated: false })
         
         // Stop token monitoring when user logs out
         tokenManager.stopTokenMonitoring()
@@ -100,38 +116,38 @@ export const useUserStore = create<UserStore>()(
         set({ accessToken: newToken })
       },
       logout: async () => {
-        // In a real application, you would call an auth service to log out
-        // For now, we'll just clear the data locally
-        set({ isAuthenticated: false, accessToken: null, user: null, wasAuthenticated: false })
-        
-        // Stop token monitoring
-        tokenManager.stopTokenMonitoring()
+        loggingOut = true
+        get().clearAuthData()
+        try {
+          await userAuthService.logout()
+        } finally {
+          loggingOut = false
+        }
       },
       
       attemptTokenRefresh: async () => {
-        try {
-          const response = await userAuthService.refreshToken()
-          
-          if (response.accessToken) {
-            // Update the store with new token
-            set({ 
-              isAuthenticated: true, 
-              accessToken: response.accessToken,
-              user: get().user, // Keep existing user data
-              wasAuthenticated: true
-            })
-            
-            // Initialize token monitoring
+        if (loggingOut || !get().user || !(get().isAuthenticated || get().wasAuthenticated)) return false
+        if (refreshPromise) return refreshPromise
+        const generation = authGeneration
+        const user = get().user!
+        const promise = (async () => {
+          try {
+            const response = await userAuthService.refreshToken()
+            if (generation !== authGeneration) return false
+            if (!response.accessToken || (response.userId && response.userId !== user.userId))
+              throw new Error('Invalid refreshed account identity')
+            set({ isAuthenticated: true, accessToken: response.accessToken, user,
+              userId: user.userId, wasAuthenticated: true })
             tokenManager.initialize()
-            
             return true
-          } else {
-            throw new Error('No access token in refresh response')
+          } catch {
+            if (generation === authGeneration) get().clearAuthData()
+            return false
           }
-        } catch (error) {
-          // Clear auth data if refresh fails
-          set({ isAuthenticated: false, accessToken: null, user: null, wasAuthenticated: false })
-          return false
+        })()
+        refreshPromise = promise
+        try { return await promise } finally {
+          if (refreshPromise === promise) refreshPromise = null
         }
       }
     }),

@@ -1,444 +1,406 @@
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Card } from "./components/Card"
-import { PlayerHand } from "./components/PlayerHand"
-import { BiddingArea } from "./components/BiddingArea"
-import { PlayingArea } from "./components/PlayingArea"
-import { GameCompleted } from "./components/GameCompleted"
-import { useGameStore } from "../../stores/gameStore"
-import { useRoomDataStore } from "../../stores/roomDataStore"
-import { useAITurn } from "../../hooks/useAITurn"
-import { PlayingCard, Position } from "./types"
-import { useNavigate } from "react-router-dom"
-import { subtractPositions } from "../../utils/positionUtils"
-import { ArrowLeft } from "lucide-react"
-import { useMemo } from "react"
+import { useState } from 'react'
+import { BiddingArea } from './components/BiddingArea'
+import { useGameStore } from '../../stores/gameStore'
+import { useRoomDataStore } from '../../stores/roomDataStore'
+import { useUserStore } from '../../stores/userStore'
+import { PlayingCard, Position } from './types'
+import { toDisplayPosition } from '../../utils/positionUtils'
+import { convertFrontendCardToServer } from '../../utils/gameStateConverter'
+import { roomWebSocketService } from '../../services/websocketService'
+import { useErrorStore } from '../../stores/errorStore'
+import { sortVisibleHand } from '../../utils/handOrder'
+import { SeatPresence } from './components/SeatPresence'
+import { useRoomFeaturesStore } from '../../stores/roomFeaturesStore'
+import { ClaimControls } from './components/ClaimControls'
 
+export function TableCard({
+  card,
+  playable,
+  onPlay,
+  index = 0,
+}: {
+  card: PlayingCard
+  playable?: boolean
+  onPlay?: () => void
+  index?: number
+}) {
+  const suitNames = {
+    '♣': 'clubs',
+    '♦': 'diamonds',
+    '♥': 'hearts',
+    '♠': 'spades',
+  }
+  const name = `${card.rank} of ${suitNames[card.suit]}`
+  return (
+    <button
+      type="button"
+      className={`table-card ${
+        card.suit === '♥' || card.suit === '♦' ? 'red-suit' : ''
+      }`}
+      aria-label={`${onPlay ? 'Play ' : ''}${name}`}
+      disabled={!playable}
+      onClick={onPlay}
+      style={{ '--deal-index': index } as React.CSSProperties}
+    >
+      <span className="card-corner">
+        {card.rank}
+        <span>{card.suit}</span>
+      </span>
+      <span className="card-pip" aria-hidden="true">
+        {card.suit}
+      </span>
+      <span className="card-corner bottom" aria-hidden="true">
+        {card.rank}
+        <span>{card.suit}</span>
+      </span>
+    </button>
+  )
+}
 
-export default function BridgeGame() {
-  const navigate = useNavigate()
+export default function BridgeGame({
+  onDisconnect,
+}: {
+  onDisconnect?: () => void
+}) {
   const {
-    gameData,
-    selectedCard,
-    setSelectedCard,
-    aiThinking,
-    startNewGame,
+    gameData: game,
+    currentPlayerPosition: viewer,
     makeBid,
     playCard,
-    isMyTurn,
-    canMakeMove
+    pendingAction,
   } = useGameStore()
-  const { getNorthPlayerName, getWestPlayerName, getEastPlayerName, getPlayerDisplayName, isRobot } = useRoomDataStore()
-  const { getCurrentPlayerPosition } = useGameStore()
-
-  // Handle AI turns automatically
-  useAITurn()
-
-  const handleBackToRoom = () => {
-    navigate('/')
-  }
-
-  const handleCardClick = (card: PlayingCard) => {
-    if (gameData.phase === "playing") {
-      playCard(card)
-    } else {
-      setSelectedCard(selectedCard?.suit === card.suit && selectedCard?.rank === card.rank ? null : card)
+  const { currentRoom: room, getPlayerDisplayName } = useRoomDataStore()
+  const [nextPending, setNextPending] = useState(false)
+  const features = useRoomFeaturesStore((state) => state.roomId === room?.roomId ? state.board : undefined)
+  const claimPending = features?.claim?.status === 'pending'
+  const event = useRoomFeaturesStore((state) => state.duplicateEvent)
+  const lastEventBoard = !!features?.eventId && !!event && event.eventId === features.eventId && game.gameNumber >= event.boardCount
+  const collecting = game.completedTrick
+  const collectionRemaining = game.scheduledAction?.kind === 'clearTrick'
+    ? Math.max(0, game.scheduledAction.dueAt - (game.serverTimeMs ?? Date.now()))
+    : 1200
+  const seats: Position[] = ['North', 'East', 'South', 'West']
+  const currentHasCards = Object.values(game.currentTrick.cards).some(Boolean)
+  const nextBoard = async () => {
+    const user = useUserStore.getState().userId
+    if (!room || !user || claimPending || lastEventBoard) return
+    setNextPending(true)
+    try {
+      const state = useRoomFeaturesStore.getState()
+      await roomWebSocketService.nextBoard(room.roomId, user, state.roomId === room.roomId ? { boardId: state.board.boardId, revision: state.board.revision } : undefined)
+    } catch (error) {
+      useErrorStore
+        .getState()
+        .showError(
+          error instanceof Error
+            ? error.message
+            : 'Next board was not confirmed'
+        )
+    } finally {
+      setNextPending(false)
     }
   }
-
-  // Get the current player's position once
-  const currentPlayerPosition = getCurrentPlayerPosition()
-
-  const renderPlayerHand = (displayPosition: Position) => {
-    // Determine if this is the current player's hand
-    const isCurrentPlayer = displayPosition === "South"
-    
-    // Get the actual game position for this display position using subtractPositions
-    const gamePosition: Position = subtractPositions(currentPlayerPosition, displayPosition)
-    
-    // Check if cards should be shown
-    const showCards = isCurrentPlayer || 
-      (gameData.phase === "playing" && gameData.dummy === gamePosition && gameData.firstCardPlayed)
-    
-    // Check if this is a dummy hand
-    const isDummy = gameData.phase === "playing" && gameData.dummy === gamePosition
-    
-    // Check if current player should control this hand using new seat-based logic
-    const canMoveResult = canMakeMove()
-    const shouldCurrentPlayerControl = isCurrentPlayer && isMyTurn() && canMoveResult
-    
-    console.log('PlayerHand render:', {
-      displayPosition,
-      isCurrentPlayer,
-      isMyTurnResult: isMyTurn(),
-      canMoveResult,
-      shouldCurrentPlayerControl,
-      phase: gameData.phase
-    })
-    
-    // For East/West dummy hands, use column display
-    const displayAsDummy = isDummy && (displayPosition === "East" || displayPosition === "West")
-
-    return (
-      <PlayerHand
-        position={displayPosition}
-        cards={gameData.hands[gamePosition] || []}
-        isCurrentPlayer={isCurrentPlayer}
-        isPlayerTurn={shouldCurrentPlayerControl}
-        showCards={showCards}
-        isDummy={isDummy}
-        selectedCard={selectedCard}
-        currentTrickCard={gameData.currentTrick?.cards?.[gamePosition] || null}
-        onCardClick={shouldCurrentPlayerControl ? handleCardClick : undefined}
-        displayAsDummy={displayAsDummy}
-      />
-    )
-  }
-
-  const getPlayerInitial = (playerName: String) => {
-    return playerName ? playerName.charAt(0).toUpperCase() : "?"
-  }
-
-  const getPlayerColor = (seat: string) => {
-    // Server now returns full position names, so we can use the seat directly
-    if (seat === 'North' || seat === 'South' || seat === 'East' || seat === 'West') {
-      const colors: Record<string, string> = {
-        "North": "from-blue-500 to-blue-600",
-        "South": "from-emerald-500 to-emerald-600",
-        "East": "from-pink-500 to-pink-600",
-        "West": "from-purple-500 to-purple-600"
-      }
-      return colors[seat] || "from-gray-500 to-gray-600"
-    }
-    // Fallback for any abbreviated format
-    const colors: Record<string, string> = {
-      "N": "from-blue-500 to-blue-600",
-      "S": "from-emerald-500 to-emerald-600",
-      "E": "from-pink-500 to-pink-600",
-      "W": "from-purple-500 to-purple-600"
-    }
-    return colors[seat] || "from-gray-500 to-gray-600"
-  }
-
+  const contract = game.contract
+  const result = game.result
+  const status =
+    claimPending
+      ? 'Claim pending · play paused by server'
+      : game.phase === 'completed'
+      ? 'Board complete'
+      : game.isMyTurn
+      ? game.playSeat === game.dummy && game.dummy !== viewer
+        ? `Your turn · play from dummy (${game.dummy})`
+        : `Your turn to ${game.phase === 'bidding' ? 'bid' : 'play'}`
+      : `Waiting for ${game.currentPlayer}`
   return (
-    <main className="min-h-screen bg-gradient-to-br from-green-800 via-green-700 to-green-900 relative overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-600/20 via-transparent to-green-900/40"></div>
-
-      {/* Back to Room Button */}
-      <button
-        onClick={handleBackToRoom}
-        className="fixed top-4 left-4 z-30 flex items-center gap-2 px-3 py-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg hover:bg-white transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4 text-gray-600" />
-        <span className="font-medium text-gray-800">Back to Room</span>
-      </button>
-
-      {/* Game Layout - Players positioned at screen edges */}
-      <div className="fixed inset-0 z-20 pointer-events-none">
-        {/* Played Cards Display - Center of screen */}
-        {gameData.phase === "playing" && gameData.currentTrick && Object.values(gameData.currentTrick.cards).some(card => card !== null) && (
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-            {/* Turn Indicator */}
-            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-20">
-              <div className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
-                <span className="font-semibold">Current Turn: </span>
-                <span className="font-bold text-lg">{gameData.currentPlayer}</span>
-              </div>
-            </div>
-            
-            {/* Trick Counter */}
-            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-12">
-              <div className="bg-green-600 text-white px-3 py-1 rounded-lg shadow-lg text-sm">
-                <span className="font-semibold">Trick {(gameData.tricks?.length || 0) + 1}</span>
-              </div>
-            </div>
-            
-            <div className="relative w-80 h-80">
-              {/* North card - top center */}
-              {gameData.currentTrick.cards.North && (
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 animate-in fade-in duration-300">
-                  <Card
-                    card={gameData.currentTrick.cards.North}
-                    isClickable={false}
-                    isSelected={false}
-                    isPlayed={true}
-                  />
-                </div>
-              )}
-              
-              {/* West card - left center */}
-              {gameData.currentTrick.cards.West && (
-                <div className="absolute left-0 top-1/2 transform -translate-y-1/2 animate-in fade-in duration-300">
-                  <Card
-                    card={gameData.currentTrick.cards.West}
-                    isClickable={false}
-                    isSelected={false}
-                    isPlayed={true}
-                  />
-                </div>
-              )}
-              
-              {/* East card - right center */}
-              {gameData.currentTrick.cards.East && (
-                <div className="absolute right-0 top-1/2 transform -translate-y-1/2 animate-in fade-in duration-300">
-                  <Card
-                    card={gameData.currentTrick.cards.East}
-                    isClickable={false}
-                    isSelected={false}
-                    isPlayed={true}
-                  />
-                </div>
-              )}
-              
-              {/* South card - bottom center */}
-              {gameData.currentTrick.cards.South && (
-                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 animate-in fade-in duration-300">
-                  <Card
-                    card={gameData.currentTrick.cards.South}
-                    isClickable={false}
-                    isSelected={false}
-                    isPlayed={true}
-                  />
-                </div>
-              )}
-            </div>
+    <main className="room-shell game-room">
+      <header className="room-topbar">
+        <div>
+          <span className="room-eyebrow">THE BRIDGE ROOM</span>
+          <h1>{room?.roomName || 'Bridge table'}</h1>
+        </div>
+        <div className="board-meta">
+          <span>Board {game.gameNumber}</span>
+          <span>Dealer {game.dealer}</span>
+          <span>
+            Vulnerable:{' '}
+            {game.vulnerability.NS && game.vulnerability.EW
+              ? 'Both'
+              : game.vulnerability.NS
+              ? 'N–S'
+              : game.vulnerability.EW
+              ? 'E–W'
+              : 'None'}
+          </span>
+        </div>
+        <button className="room-button secondary" onClick={onDisconnect}>
+          Disconnect
+        </button>
+      </header>
+      <div className="game-layout">
+        <section
+          className="felt-table"
+          aria-label={`Bridge table. You are ${viewer}`}
+        >
+          <div className="felt-mark" aria-hidden="true">
+            ♠<span>BRIDGE CLUB</span>
           </div>
-        )}
-
-        {/* North Player - Top */}
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 pointer-events-auto">
-          <div className="flex flex-col items-center gap-2">
-            {/* North Player Cards */}
-            <div className="flex gap-1 sm:gap-1 md:gap-1 lg:gap-1">
-            {Array.from({ length: 13 }).map((_, i) => (
+          {seats.map((actual) => {
+            const display = toDisplayPosition(actual, viewer)
+            const dummyVisible = actual === game.dummy && game.firstCardPlayed
+            const visible = actual === viewer || dummyVisible
+            const cards = visible
+              ? sortVisibleHand(game.hands[actual], contract?.suit)
+              : []
+            const count =
+              game.handCounts?.[actual] ?? (visible ? cards.length : 0)
+            const controlled =
+              game.isMyTurn &&
+              !collecting &&
+              !pendingAction &&
+              !claimPending &&
+              game.phase === 'playing' &&
+              game.playSeat === actual
+            return (
+              <section
+                key={`${game.gameNumber}-${actual}`}
+                className={`table-seat seat-${display.toLowerCase()} ${
+                  dummyVisible ? 'dummy-seat' : ''
+                } ${game.currentPlayer === actual ? 'active-seat' : ''}`}
+                aria-label={`${actual} hand${dummyVisible ? ', dummy' : ''}`}
+              >
+                <div className="seat-label">
+                  <b className="seat-compass">{actual[0]}</b>
+                  <div>
+                    <strong>
+                      {actual === viewer ? 'You' : getPlayerDisplayName(actual)}
+                    </strong>
+                    <small>
+                      {actual}
+                      {actual === game.dummy
+                        ? ' · Dummy'
+                        : actual === contract?.declarer
+                        ? ' · Declarer'
+                        : ''}{' '}
+                      · {count} cards
+                    </small>
+                    <SeatPresence seat={actual} />
+                  </div>
+                </div>
                 <div
-                  key={i}
-                  className="w-8 h-12 bg-blue-900 border border-blue-800 rounded-sm shadow-sm -ml-4 first:ml-0 xs:-ml-3 sm:-ml-2 md:-ml-1 lg:ml-0"
-                />
-              ))}
-            </div>
-            {/* North Player Info */}
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg">
-              <div className="flex items-center gap-2">
-                {(() => {
-                  const northPlayerName = getNorthPlayerName(currentPlayerPosition);
-                  return northPlayerName ? (
-                    <>
-                      <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("N")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                        {isRobot(String(northPlayerName)) ? "🤖" : subtractPositions("North", currentPlayerPosition).charAt(0)}
-                      </div>
-                      <span className="font-semibold text-gray-800">
-                        {northPlayerName}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                        ?
-                      </div>
-                      <span className="font-semibold text-gray-600">Empty</span>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* West Player - Left */}
-        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 pointer-events-auto">
-          <div className="flex items-center gap-4">
-            {/* West Player Cards */}
-            <div className="flex flex-col gap-1 sm:gap-1 md:gap-1 lg:gap-1">
-              {Array.from({ length: 13 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="w-12 h-8 bg-purple-900 border border-purple-800 rounded-sm shadow-sm -mt-4 first:mt-0 xs:-mt-3 sm:-mt-2 md:-mt-1 lg:mt-0"
-                />
-              ))}
-            </div>
-            {/* West Player Info */}
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg rotate-90">
-              <div className="flex items-center gap-2">
-                {(() => {
-                  const westPlayerName = getWestPlayerName(currentPlayerPosition);
-                  return westPlayerName ? (
-                    <>
-                      <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("W")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                        {isRobot(String(westPlayerName)) ? "🤖" : subtractPositions("West", currentPlayerPosition).charAt(0)}
-                      </div>
-                      <span className="font-semibold text-gray-800">
-                        {westPlayerName}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                        ?
-                      </div>
-                      <span className="font-semibold text-gray-600">Empty</span>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* East Player - Right */}
-        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-auto">
-          <div className="flex items-center gap-4">
-            {/* East Player Info */}
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg -rotate-90">
-              <div className="flex items-center gap-2">
-                {(() => {
-                  const eastPlayerName = getEastPlayerName(currentPlayerPosition);
-                  return eastPlayerName ? (
-                    <>
-                      <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("E")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                        {isRobot(String(eastPlayerName)) ? "🤖" : subtractPositions("East", currentPlayerPosition).charAt(0)}
-                      </div>
-                      <span className="font-semibold text-gray-800">
-                        {eastPlayerName}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                        ?
-                      </div>
-                      <span className="font-semibold text-gray-600">Empty</span>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-            {/* East Player Cards */}
-            <div className="flex flex-col gap-1 sm:gap-1 md:gap-1 lg:gap-1">
-              {Array.from({ length: 13 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="w-12 h-8 bg-purple-900 border border-purple-800 rounded-sm shadow-sm -mt-4 first:mt-0 xs:-mt-3 sm:-mt-2 md:-mt-1 lg:mt-0"
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* South Player - Bottom (You) */}
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 pointer-events-auto">
-          <div className="flex flex-col items-center gap-2">
-            {/* South Player Info */}
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg">
-              <div className="flex items-center gap-2">
-                {(() => {
-                  const playerName = getPlayerDisplayName(currentPlayerPosition);
-                  return playerName ? (
-                    <>
-                      <div className={`w-8 h-8 bg-gradient-to-br ${getPlayerColor("S")} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                        {currentPlayerPosition.charAt(0)}
-                      </div>
-                      <span className="font-semibold text-gray-800">
-                        {playerName}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                        ?
-                      </div>
-                      <span className="font-semibold text-gray-600">Empty</span>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-            {/* South Player Cards */}
-            <div className="flex gap-1 sm:gap-1 md:gap-1 lg:gap-1">
-              {renderPlayerHand("South")}
-            </div>
-          </div>
-        </div>
-
-        {/* Center Playing/Bidding Area */}
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto">
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg p-6 shadow-xl min-w-[400px]">
-            {/* Turn indicator for playing phase */}
-            {gameData.phase === "playing" && (
-              <div className="mb-4 text-center">
-                <div className={`inline-block px-6 py-3 rounded-xl shadow-lg border-2 ${
-                  isMyTurn() 
-                    ? 'bg-green-600 text-white border-green-500' 
-                    : 'bg-gray-400 text-gray-200 border-gray-300'
-                }`}>
-                  <span className="font-semibold text-lg">🎯 It's </span>
-                  <span className="font-bold text-2xl text-yellow-300">{gameData.currentPlayer}'s</span>
-                  <span className="font-semibold text-lg"> turn to play!</span>
-                  {isMyTurn() && (
-                    <div className="text-sm mt-1 text-yellow-200">
-                      It's your turn!
+                  className={`hand-fan ${visible ? 'face-up' : 'face-down'}`}
+                  aria-label={
+                    visible
+                      ? `${actual} cards`
+                      : `${actual}: ${count} hidden cards`
+                  }
+                >
+                  {visible
+                    ? cards.map((card, index) => (
+                        <TableCard
+                          key={convertFrontendCardToServer(card)}
+                          card={card}
+                          index={index}
+                          playable={
+                            controlled &&
+                            game.legalCards?.includes(
+                              convertFrontendCardToServer(card)
+                            )
+                          }
+                          onPlay={
+                            controlled ? () => void playCard(card) : undefined
+                          }
+                        />
+                      ))
+                    : Array.from({ length: count }, (_, index) => (
+                        <span
+                          className="card-back"
+                          key={index}
+                          style={
+                            { '--deal-index': index } as React.CSSProperties
+                          }
+                        />
+                      ))}
+                </div>
+              </section>
+            )
+          })}
+          {game.phase !== 'bidding' && (
+            <div className="trick-zone" aria-label="Current trick">
+              {!currentHasCards && !collecting && (
+                <div className="trick-placeholder">
+                  ♣
+                  <span>
+                    {game.phase === 'completed' ? 'Well played' : 'Lead a card'}
+                  </span>
+                </div>
+              )}
+              {!collecting && seats.map((actual) => {
+                const card = game.currentTrick.cards[actual]
+                const position = toDisplayPosition(actual, viewer).toLowerCase()
+                return card ? (
+                  <div
+                    key={`${
+                      game.tricks.length
+                    }-${actual}-${convertFrontendCardToServer(card)}`}
+                    className={`trick-card trick-${position}`}
+                  >
+                    <TableCard card={card} />
+                    <span className="played-seat">{actual}</span>
+                  </div>
+                ) : null
+              })}
+              {collecting &&
+                seats.map((actual) => {
+                  const card = collecting.cards[actual]
+                  return card ? (
+                    <div
+                      key={`collect-${game.tricks.length}-${actual}`}
+                      style={{
+                        '--collection-duration': `${Math.min(800, collectionRemaining)}ms`,
+                        '--collection-delay': `${Math.max(0, collectionRemaining - 800)}ms`,
+                      } as React.CSSProperties}
+                      className={`trick-card trick-${toDisplayPosition(
+                        actual,
+                        viewer
+                      ).toLowerCase()} collect-trick collect-${toDisplayPosition(
+                        collecting.winner || actual,
+                        viewer
+                      ).toLowerCase()}`}
+                    >
+                      <TableCard card={card} />
+                      <span className="played-seat">{actual}</span>
                     </div>
-                  )}
+                  ) : null
+                })}
+            </div>
+          )}
+          {game.phase === 'bidding' && (
+            <div className="table-auction-summary">
+              <span className="room-eyebrow">AUCTION IN PROGRESS</span>
+              <strong>{game.currentPlayer} to bid</strong>
+            </div>
+          )}
+        </section>
+        <aside className="game-sidebar">
+          <section
+            className={`turn-status ${game.isMyTurn && !collecting ? 'your-turn' : ''}`}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="status-dot" />
+            {collecting
+              ? `Collecting trick · ${collecting.winner} won`
+              : game.scheduledAction?.kind === 'robotCard'
+              ? `${game.currentPlayer} is thinking…`
+              : pendingAction ? 'Waiting for server confirmation…' : status}
+          </section>
+          {game.phase === 'bidding' ? (
+            <BiddingArea onMakeBid={makeBid} />
+          ) : (
+            <section className="score-panel">
+              <span className="room-eyebrow">CONTRACT</span>
+              <h2>
+                {contract
+                  ? `${contract.level}${contract.suit}${
+                      contract.redoubled ? ' XX' : contract.doubled ? ' X' : ''
+                    }`
+                  : 'Passed out'}
+              </h2>
+              {contract && (
+                <p>
+                  {contract.declarer} declares · {contract.level + 6} tricks
+                  needed
+                </p>
+              )}
+              <div className="trick-score">
+                <div>
+                  <span>N–S</span>
+                  <strong>
+                    {
+                      game.tricks.filter(
+                        (trick) =>
+                          trick.winner === 'North' || trick.winner === 'South'
+                      ).length
+                    }
+                  </strong>
+                </div>
+                <div>
+                  <span>E–W</span>
+                  <strong>
+                    {
+                      game.tricks.filter(
+                        (trick) =>
+                          trick.winner === 'East' || trick.winner === 'West'
+                      ).length
+                    }
+                  </strong>
                 </div>
               </div>
-            )}
-            
-            {/* Turn indicator for bidding phase */}
-            {gameData.phase === "bidding" && (
-              <div className="mb-4 text-center">
-                <div className={`inline-block px-6 py-3 rounded-xl shadow-lg border-2 ${
-                  isMyTurn() 
-                    ? 'bg-blue-600 text-white border-blue-500' 
-                    : 'bg-gray-400 text-gray-200 border-gray-300'
-                }`}>
-                  <span className="font-semibold text-lg">🎯 It's </span>
-                  <span className="font-bold text-2xl text-yellow-300">{gameData.currentPlayer}'s</span>
-                  <span className="font-semibold text-lg"> turn to bid!</span>
-                  {isMyTurn() && (
-                    <div className="text-sm mt-1 text-yellow-200">
-                      It's your turn!
-                    </div>
-                  )}
-                </div>
+              <p className="muted">{features?.claimSettlement ? 'Played tricks only · claim allocation below' : 'Tricks won'} · {game.tricks.length} / 13</p>
+              {game.scores && (
+                <p>
+                  Session score · N–S {game.scores.NS} / E–W {game.scores.EW}
+                </p>
+              )}
+            </section>
+          )}
+          {game.phase === 'completed' && !collecting && (
+            <section className="result-panel" aria-label="Board result">
+              <h2>
+                {result?.passedOut
+                  ? 'Passed out'
+                  : result
+                  ? result.made
+                    ? 'Contract made'
+                    : 'Contract defeated'
+                  : 'Board complete'}
+              </h2>
+              {result && !result.passedOut && (
+                <p>
+                  {result.declarerTricks} tricks · N–S {result.scoreNS} · E–W{' '}
+                  {result.scoreEW}
+                </p>
+              )}
+              {lastEventBoard ? (
+                <p>Your event boards are finished. Other tables may still be playing; see Duplicate club tables for released results.</p>
+              ) : room?.ownerId === useUserStore.getState().userId ? (
+                <button
+                  className="room-button"
+                  disabled={nextPending || !!collecting || claimPending}
+                  onClick={nextBoard}
+                >
+                  {nextPending ? 'Dealing…' : 'Deal next board'}
+                </button>
+              ) : (
+                <p>Waiting for the host to deal the next board.</p>
+              )}
+            </section>
+          )}
+          <ClaimControls />
+          {game.previousTrick && (
+            <details className="last-trick">
+              <summary>Last trick · {game.previousTrick.winner} won</summary>
+              <div>
+                {seats.map((seat) => (
+                  <span key={seat}>
+                    {seat}:{' '}
+                    {game.previousTrick?.cards[seat]
+                      ? `${game.previousTrick.cards[seat]!.rank}${
+                          game.previousTrick.cards[seat]!.suit
+                        }`
+                      : '—'}
+                  </span>
+                ))}
               </div>
-            )}
-            
-            {gameData.phase === "bidding" && (
-              <BiddingArea onMakeBid={makeBid} />
-            )}
-            {gameData.phase === "playing" && (
-              <PlayingArea gameState={gameData} />
-            )}
-            {gameData.phase === "completed" && (
-              <GameCompleted
-              gameData={gameData}
-                onNewGame={startNewGame}
-                onBackToRoom={handleBackToRoom}
-              />
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Game Info 
-      <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 text-center text-sm text-white/90 pointer-events-auto">
-        <p>
-          {gameData.phase}
-          {gameData.phase === "bidding"
-            ? "Players are bidding. Make your bid when it's your turn."
-            : gameData.phase === "playing"
-              ? "Playing phase. Click a card from your hand to play it."
-              : "Game completed!"}
-        </p>
-        {aiThinking && (
-          <p className="text-yellow-300 font-medium mt-2">
-            AI is thinking using SAYC bidding conventions...
+            </details>
+          )}
+          <p className="table-help">
+            Select a legal card to play. Cards support Tab and Enter. The server
+            manages computer turns and all rules.
           </p>
-        )}
-      </div>*/}
-
-      {/* Center area for bridge gameplay */}
-      <div className="relative z-10 w-full h-screen">{/* Future components will go here */}</div>
+        </aside>
+      </div>
     </main>
   )
 }

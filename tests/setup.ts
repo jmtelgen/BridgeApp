@@ -2,17 +2,12 @@ import { beforeAll, afterEach, afterAll } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
-// Set up DOM environment for tests
-import { jsdom } from 'jsdom'
-
-const dom = new jsdom('<!DOCTYPE html><html><body></body></html>', {
-  url: 'http://localhost'
+if (!window.matchMedia) window.matchMedia = (query: string) => ({
+  matches: false, media: query, onchange: null,
+  addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => true,
 })
-
-global.document = dom.window.document
-global.window = dom.window
-global.navigator = dom.window.navigator
-
+HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
+HTMLDialogElement.prototype.close = function () { this.removeAttribute('open') }
 // Mock ResizeObserver
 global.ResizeObserver = class ResizeObserver {
   observe() {}
